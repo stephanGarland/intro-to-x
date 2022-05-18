@@ -1,0 +1,9 @@
+To access, please run the following command:
+
+    sudo echo "$(minikube ip) echo.internal" >> /etc/hosts
+
+Then go to http://echo.internal inyour browser.
+
+To clean up, run the following command:
+
+    sudo sed -i'' '$d' /etc/hosts

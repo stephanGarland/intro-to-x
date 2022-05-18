@@ -1,0 +1,26 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: echo-rw
+  namespace: echo
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: echo-rw
+  namespace: echo
+subjects:
+- kind: User
+  name: echo-user
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: echo-rw
+  apiGroup: rbac.authorization.k8s.io
