@@ -50,7 +50,10 @@ All of these can be grouped as SQL, and some of them can also be combined - `DQL
 * Table
   * A logical grouping of data, of varying or similar types. May contain constraints, indices, etc.
 * Tablespace
-  * The link between the logical storage layer (tables, indices) and the physical storage layer (the disk's filesystem).
+  * The link between the logical storage layer (tables, indices) and the physical storage layer (the disk's filesystem). This is an actual file that exists on the disk, contained in `$MYSQL_DATA_DIR`, nominally `/var/lib/mysql`.
+    * As an aside, this fact, combined with [RDS MySQL file size limits](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/MySQL.KnownIssuesAndLimitations.html#MySQL.Concepts.Limits.FileSize) yields some interesting information about RDS. Since they used to (anything created before April 2014) limit a table to 2 TiB*, that means that they were using ext3, as that is its maximum file size. Instances created after April 2014 are limited to 16 TiB* files, indicating that they are probably now using ext4, as that is generally its maximum file size. 16 TB is also the limit for InnoDB with 4 KB InnoDB page sizes, so it's possible the underlying disk's filesystem is XFS or something else, but since that value defaults to 16 KB, it seems unlikely.
+
+\* AWS' docs state that the limits are in TB (terabytes) instead of TiB (tebibytes). It's possible that their VM subsystem limits the size to n TB, but the actual filesystem is capable of n TiB.
 
 ## What is a relational database?
 
@@ -123,14 +126,14 @@ As of MySQL 8.0, this is the official architecture drawing:
   * SQL Interface
     * This component is the link between the Connector and the rest of the Server.
 * Storage Engine
-  * This component stores and manages the actual databases. Historically MySQL used the MyISAM engine, but switched to InnoDB with version 5.6. Both - and others - remain available if desired.
+  * This component stores and manages the actual databases. Historically MySQL used the MyISAM engine, but switched to InnoDB with version 5.6. Both (and others) remain available if desired, but unless you have an extremely specific use case, you should use InnoDB.
 
 # MySQL Operations
 
 ## Assumptions
 
 * All examples here are using MySQL 8.0.23, with the InnoDB engine.
-* You're using the `mysql` client, available via Homebrew: `brew install mysql-client`
+* You're using the `mysql` client, available via Homebrew: `brew install mysql-client`.
 * You're connecting to the TODO database, using the credentials in 1Pass.
 
 ## Notes
@@ -146,8 +149,8 @@ As of MySQL 8.0, this is the official architecture drawing:
 
 A brand-new installation of MySQL will typically have four schemata - `information_schema`, `mysql`, `performance_schema`, and `sys`.
 
-* `information_schema` contains, as the name implies, information about the schema in the database. This includes columns, column types, indices, foreign keys, and tables.
-* `mysql` generally contains configuration and logs
+* `information_schema` contains information about the schema in the database. This includes columns, column types, indices, foreign keys, and tables.
+* `mysql` generally contains configuration and logs.
 * `sys` generally contains information about the SQL engine (InnoDB here), including currently executing processes, and query metrics.
 * `performance_schema` contains some specific performance information about the schema in the database, such as deadlocks, locks, memory consumption, mutexes, and threads.
 
@@ -201,8 +204,9 @@ FROM
 | performance_schema |
 | sys                |
 | test               |
+| northwind          |
 +--------------------+
-5 rows in set (0.01 sec)
+6 rows in set (0.01 sec)
 ```
 
 ```sql
@@ -251,7 +255,7 @@ HAVING
 1 row in set (0.01 sec)
 ```
 
-### String literals and you
+### String literals
 
 You may have noticed that in the above examples, sometimes a column or table name was enclosed with a single quote (`'`), sometimes a backtick (`\``), and other times nothing at all. This is deliberate.
 
@@ -271,9 +275,9 @@ mysql> CREATE TABLE `table` (id INT);
 Query OK, 0 rows affected (0.15 sec)
 ```
 
-#### Hands-on example
+#### SQL_MODE
 
-First, let's check the current `SQL_MODE`. System variables can be viewed with either `SHOW VARIABLES` or `SELECT @@<[GLOBAL, SESSION]>`.
+As it turns out, you can alter this behavior. First, let's check the current `SQL_MODE`. System variables can be viewed with either `SHOW VARIABLES` or `SELECT @@<[GLOBAL, SESSION]>`.
 
 ```sql
 mysql> SHOW VARIABLES LIKE 'sql_mode'\G
@@ -391,20 +395,20 @@ mysql> SET @@sql_mode = (SELECT @@GLOBAL.sql_mode);
 Query OK, 0 rows affected (0.00 sec)
 ```
 
-## Table operations
-
 ### Create a schema
 
-Let's create some tables! First, we need a schema There aren't a lot of options here to be covered, so we can just create one named `test`. Ideally, we would also enable encryption at rest. This can be globally set, or specified at schema creation - any tables in the schema inherit its setting. If you're curious, InnoDB uses AES, with ECB mode for tablespaces, and CBC mode for data. Also notably, [undo logs](https://dev.mysql.com/doc/refman/8.0/en/innodb-undo-logs.html) and [redo logs](https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html) have their encryption handled by separate variables. However, since this requires some additional work (all of the easy options are only available with MySQL Enterprise; MySQL Community requires you to generate and store the key yourself), we'll skip it.
+Let's create some tables! First, we need a schema. There aren't a lot of options here to be covered, so we can just create one. I'll be using `foo`, but you should substitute any name you'd like that's not already in use. Ideally, we would also enable encryption at rest. This can be globally set, or specified at schema creation - any tables in the schema inherit its setting. If you're curious, InnoDB uses AES, with ECB mode for tablespaces, and CBC mode for data. Also notably, [undo logs](https://dev.mysql.com/doc/refman/8.0/en/innodb-undo-logs.html) and [redo logs](https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html) have their encryption handled by separate variables. However, since this requires some additional work (all of the easy options are only available with MySQL Enterprise; MySQL Community requires you to generate and store the key yourself), we'll skip it.
 
 ```sql
-mysql> CREATE SCHEMA test;
+mysql> CREATE SCHEMA foo;
 Query OK, 1 row affected (0.02 sec)
 ```
 
+## Table operations
+
 ### Create tables
 
-First, we'll select our new schema so we don't have to constantly specify it.
+First, we'll select our new schema so we don't have to constantly specify it. I'll be using `test` here, but you should substitute whatever you created in the last step.
 
 ```sql
 mysql> USE test;
@@ -435,7 +439,7 @@ mysql> SHOW COLUMNS FROM users;
 4 rows in set (0.02 sec)
 ```
 
-Hmm, something's not quite right as compared to the original example - we're missing `AUTO_INCREMENT`! Without it, you'd have to manually specify the `id` value (which is this table's `PRIMARY KEY`), which is annoying. Additionally, while `id` was automatically made to be `NOT NULL` since it's the PK, `uid` was not, so we need to change those. Finally, `uid` should actually be named `user_id`, and it should have a `UNIQUE` constraint. Note that when redefining a column, it's like a `POST`, not a `PUT` - if you only specify what you want to be changed, the pre-existing definitions will be deleted.
+Hmm, something's not quite right as compared to the original example - we're missing `AUTO_INCREMENT`! Without it, you'd have to manually specify the `id` value (which is this table's `PRIMARY KEY`), which is annoying. Additionally, while `id` was automatically made to be `NOT NULL` since it's the primary key, `uid` was not, so we need to change those. Finally, `uid` should actually be named `user_id`, and it should have a `UNIQUE` constraint. Note that when redefining a column, it's like a `POST`, not a `PUT` - if you only specify what you want to be changed, the pre-existing definitions will be deleted.
 
 ```sql
 mysql> ALTER TABLE users MODIFY uid BIGINT NOT NULL UNIQUE;
@@ -465,6 +469,38 @@ mysql> ALTER TABLE users RENAME COLUMN uid TO user_id;
 Query OK, 0 rows affected (0.12 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 ```
+
+Now, we'll make the `zaps` table. You have noticed by now that the primary key column `id` has been the first column in all of these definitions. While nothing stops you from placing it last, or in the middle, this is a bad idea for a variety of reasons, not least of which it's confusing for anyone used to normal ordering. There may be some small binpacking gains to be made by carefully matching column widths to page sizes (the default pagesize for InnoDB is 16 KB, and the default pagesize for most disks today is 4 KB), which can also impact performance on spinning disks. Also, prior to MySQL 8.0.13, temporary tables (usually, tables that InnoDB creates as part of a query) would silently cast `VARCHAR` and `VARBINARY` columns to their respective `CHAR` or `BINARY`. If you had some `VARCHAR` columns with a large maximum size, this could cause the required space to store them to rapidly balloon, filling up the disk.
+
+In general, column ordering in a table doesn't tremendously matter for MySQL (but it does for queries, as we'll see later), so stick to convention.
+
+```sql
+mysql>
+CREATE TABLE zaps (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT, 
+  zap_id BIGINT UNSIGNED NOT NULL UNIQUE,
+  created_at TIMESTAMP NOT NULL, 
+  last_updated_at TIMESTAMP,
+  owned_by BIGINT UNSIGNED NOT NULL, 
+  used_by JSON NOT NULL
+);
+Query OK, 0 rows affected (0.24 sec)
+
+mysql> SHOW COLUMNS FROM zaps;
++-----------------+-----------------+------+-----+---------+----------------+
+| Field           | Type            | Null | Key | Default | Extra          |
++-----------------+-----------------+------+-----+---------+----------------+
+| id              | bigint unsigned | NO   | PRI | NULL    | auto_increment |
+| zap_id          | bigint unsigned | NO   | UNI | NULL    |                |
+| created_at      | timestamp       | NO   |     | NULL    |                |
+| last_updated_at | timestamp       | YES  |     | NULL    |                |
+| owned_by        | bigint unsigned | NO   |     | NULL    |                |
+| used_by         | json            | NO   |     | NULL    |                |
++-----------------+-----------------+------+-----+---------+----------------+
+6 rows in set (0.04 sec)
+```
+
+Did you know that [MySQL supports JSON](https://dev.mysql.com/doc/refman/8.0/en/json.html) as a data type? Since 5.7.8, in fact! 
 
 #### Data types
 
@@ -555,41 +591,11 @@ mysql> SHOW COLUMNS FROM users;
 4 rows in set (0.01 sec)
 ```
 
-Now, we'll make the `zaps` table. You have noticed by now that the PK column `id` has been the first column in all of these definitions. While nothing stops you from placing it last, or in the middle, this is a bad idea for a variety of reasons, not least of which it's confusing for anyone used to normal ordering. There may be some small binpacking gains to be made by carefully matching column widths to page sizes (the default pagesize for InnoDB is 16 KB, and the default pagesize for most disks today is 4 KB), which can also impact performance on spinning disks. Also, prior to MySQL 8.0.13, temporary tables (usually, tables that InnoDB creates as part of a query) would silently cast `VARCHAR` and `VARBINARY` columns to their respective `CHAR` or `BINARY`. If you had some `VARCHAR` columns with a large maximum size, this could cause the required space to store them to rapidly balloon, filling up the disk.
-
-In general, column ordering in a table doesn't tremendously matter for MySQL (but it does for queries, as we'll see later), so stick to convention.
-
-```sql
-mysql>
-CREATE TABLE zaps (
-  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT, 
-  zap_id BIGINT UNSIGNED NOT NULL UNIQUE,
-  created_at TIMESTAMP NOT NULL, 
-  last_updated_at TIMESTAMP,
-  owned_by BIGINT UNSIGNED NOT NULL, 
-  used_by BIGINT UNSIGNED NOT NULL
-);
-Query OK, 0 rows affected (0.24 sec)
-
-mysql> SHOW COLUMNS FROM zaps;
-+-----------------+-----------------+------+-----+---------+----------------+
-| Field           | Type            | Null | Key | Default | Extra          |
-+-----------------+-----------------+------+-----+---------+----------------+
-| id              | bigint unsigned | NO   | PRI | NULL    | auto_increment |
-| zap_id          | bigint unsigned | NO   | UNI | NULL    |                |
-| created_at      | timestamp       | NO   |     | NULL    |                |
-| last_updated_at | timestamp       | YES  |     | NULL    |                |
-| owned_by        | bigint unsigned | NO   |     | NULL    |                |
-| used_by         | bigint unsigned | NO   |     | NULL    |                |
-+-----------------+-----------------+------+-----+---------+----------------+
-6 rows in set (0.02 sec)
-```
-
 ### Foreign keys
 
 These tables seem fine to start with, but the columns that we are implicitly designing to have relationships don't have any method of enforcement. While this is a valid design - placing all referential integrity requirements onto the application - SQL was designed to handle this for us, so let's make use of it. NOTE: foreign keys bring with them a huge array of problems that will likely not be seen until your scale is large, so keep that in mind, and have a plan to migrate off of them if necessary.
 
-#### Why you might want FKs
+#### Why you might want foreign keys
 
 Let's create a user, and give them a Zap.
 
@@ -633,9 +639,9 @@ last_updated_at: 2022-12-21 15:15:40
 1 row in set (0.00 sec)
 ```
 
-That's all well and good, but what if I want to delete my account? Wouldn't it be nice if devs didn't have to worry about deleting every trace of my existence? Or what if everyone's user ID has to change for a migration? Enter FKs.
+That's all well and good, but what if I want to delete my account? Wouldn't it be nice if devs didn't have to worry about deleting every trace of my existence? Or what if everyone's user ID has to change for a migration? Enter foreign keys.
 
-#### Creating a FK
+#### Creating a foreign key
 
 ```sql
 ALTER TABLE 
@@ -666,9 +672,9 @@ Create Table: CREATE TABLE `zaps` (
 1 row in set (0.00 sec)
 ```
 
-Note that not only do we now have a `FOREIGN KEY` linking `zaps.owned_by` to `users.user_id`, but InnoDB has added an index on `zaps.owned_by` - this is required, and despite the documentation informing you that you must do this before adding the FK, it actually does it for you if you don't.
+Note that not only do we now have a `FOREIGN KEY` linking `zaps.owned_by` to `users.user_id`, but InnoDB has added an index on `zaps.owned_by` - this is required, and despite the documentation informing you that you must do this before adding the foreign key, it actually does it for you if you don't.
 
-#### Demonstrating the FK
+#### Demonstrating a foreign key
 
 ```sql
 mysql> UPDATE users SET user_id = 9 WHERE id = 1;
@@ -704,9 +710,127 @@ mysql> SELECT * FROM zaps;
 Empty set (0.00 sec)
 ```
 
-## Queries
+## Column operations
 
-### Fill the tables
+### Adding columns
+
+Adding columns is done with `ALTER TABLE`:
+
+```sql
+mysql>
+ALTER TABLE 
+  zaps 
+ADD COLUMN 
+shared_with 
+  JSON;
+Query OK, 0 rows affected (0.18 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+```
+
+Just as with a table definition, the column's name (`shared_with`) and type (`JSON`) are required; additonal qualifiers like `DEFAULT`, `UNIQUE`, etc. may be appended. To add some types of default values, like a JSON array, you must call the function.
+
+### Modfying columns
+
+This was covered earlier during [table operations](#table-operations), but as a refresher, we'll again use `ALTER TABLE` to add a `DEFAULT` value of an empty JSON array, which must be called as its function:
+
+```sql
+mysql>
+ALTER TABLE
+  zaps
+MODIFY COLUMN
+shared_with
+  JSON
+  DEFAULT (
+    JSON_ARRAY()
+  );
+Query OK, 0 rows affected (0.09 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+```
+
+### Dropping columns
+
+First, we'll create a nonsense column quickly, so we can drop it. Note that if therer are foreign keys relying on this, you will first need to either disable foreign key checks, or remove those checks before you can drop the column.
+
+```sql
+mysql>
+mysql> ALTER TABLE zaps ADD COLUMN foo INT;
+Query OK, 0 rows affected (0.26 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+
+mysql> ALTER TABLE zaps DROP COLUMN foo;
+Query OK, 0 rows affected (0.33 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+```
+
+### Generated columns
+
+What if you wanted a column that automatically created data for you based on other columns?
+
+```sql
+ALTER TABLE 
+  users 
+ADD COLUMN 
+full_name VARCHAR(510) GENERATED ALWAYS AS (
+    CONCAT_WS(', ', last_name, first_name)
+  );
+Query OK, 0 rows affected (0.34 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+```
+
+Note that by default, this will create a `VIRTUAL` column (you can specify `STORED` after `AS` if you'd rather have a normal column), which is not actually stored, but instead calculated at query time. While this takes no storage space, it does add some amount of computational load, and more importantly comes with a [huge list](https://dev.mysql.com/doc/refman/8.0/en/create-table-generated-columns.html) of limitations. One large benefit, however, is that since the columns aren't actually created when the query is ran, the operation takes as long as a normal `ALTER TABLE` operation. If stored, the data must be written to the table, which will necessitate taking write locks.
+
+```sql
+mysql>
+INSERT INTO
+  users (first_name, last_name, user_id) 
+VALUES 
+  ("Stephan", "Garland", 42);
+Query OK, 1 row affected (0.05 sec)
+
+mysql> SELECT * FROM users;
++----+------------+-----------+---------+------------------+
+| id | first_name | last_name | user_id | full_name        |
++----+------------+-----------+---------+------------------+
+|  1 | Stephan    | Garland   |      42 | Garland, Stephan |
++----+------------+-----------+---------+------------------+
+1 row in set (0.00 sec)
+```
+
+### Invisible columns
+
+You can make columns `INVISIBLE` if you'd rather they not show up unless specifically queried for. This is done with the `INVISIBLE` keyword after the type (`VARCHAR(510)` here) if being created, or modified later with `ALTER COLUMN`:
+
+```sql
+mysql> ALTER TABLE users ALTER COLUMN full_name SET INVISIBLE;
+Query OK, 0 rows affected (0.19 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+
+mysql> SELECT * FROM users;
++----+------------+-----------+---------+
+| id | first_name | last_name | user_id |
++----+------------+-----------+---------+
+|  1 | Stephan    | Garland   |      42 |
++----+------------+-----------+---------+
+1 row in set (0.00 sec)
+
+mysql> SELECT *, full_name FROM users;
++----+------------+-----------+---------+------------------+
+| id | first_name | last_name | user_id | full_name        |
++----+------------+-----------+---------+------------------+
+|  1 | Stephan    | Garland   |      42 | Garland, Stephan |
++----+------------+-----------+---------+------------------+
+1 row in set (0.00 sec)
+```
+
+To set them back to visible, use `SET VISIBLE`:
+
+```sql
+mysql> ALTER TABLE users ALTER COLUMN full_name SET VISIBLE;
+Query OK, 0 rows affected (0.08 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+```
+
+## Queries
 
 We're going to need some more data to play around with, so it's time to shift gears. [Northwind Traders](https://en.wikiversity.org/wiki/Database_Examples/Northwind) is the Hello World of databases. It was created by Microsoft in the 1990s for Access, and is publicly licensed. I've loaded it into this instance, under the schema `northwind`.
 
@@ -715,7 +839,7 @@ mysql> USE northwind;
 Database changed
 ```
 
-In order to find out how many rows are in each table, there a few ways of doing so. InnoDB maintains information about tables in the `INFORMATION_SCHEMA.TABLES` table, including an estimate of row count. However, it's just that - an estimate. It can be made to be accurate if you use `ANALYZE TABLE`, but in production, you should not do this, since it places a table-wide read lock during the process. You can also use the query `SELECT COUNT(*)`, but that will perform a table scan (where the entire table is read sequentially, without indices), so it may have a performance impact on the database, as it's consuming a lot of available IOPS. Finally, assuming you have an auto-incrementing `id` field in the table, you can use `SELECT id FROM <table> ORDER BY id DESC LIMIT 1` to get the last incremented value. This is also an estimate, since it doesn't take any deletions into account (auto-increment is monotonic), but it's extremely fast.
+In order to find out how many rows are in each table, there a few ways of doing so. InnoDB maintains information about tables in the `INFORMATION_SCHEMA.TABLES` table, including an estimate of row count. However, it's just that - an estimate. It can be made to be accurate if you use `ANALYZE TABLE`, but in production, you shouldn't do this (to be clear, it should be done, but carefully), since it places a table-wide read lock during the process. You can also use the query `SELECT COUNT(*)`, but that will perform a table scan (where the entire table is read sequentially, without indices), so it may have a performance impact on the database, as it's consuming a lot of available IOPS. Finally, assuming you have an auto-incrementing `id` field in the table, you can use `SELECT id FROM <table> ORDER BY id DESC LIMIT 1` to get the last incremented value. This is also an estimate, since it doesn't take any deletions into account (auto-increment is monotonic), but it's extremely fast.
 
 Since this isn't production, we can force a refresh of our table statistics to get accurate counts. This will cause viewing the table's statistics to refresh the table statistics, and the variable is reset to its old value afterwards.
 
@@ -753,17 +877,255 @@ mysql> SELECT table_name, table_rows FROM information_schema.tables WHERE table_
 mysql> SET GLOBAL innodb_stats_on_metadata = @old_innodb_stats_on_metadata;
 ```
 
+### SELECT
+
+[MySQL docs.](https://dev.mysql.com/doc/refman/8.0/en/select.html)
+
+You use it to select data from tables (or `/dev/stdin`). Any questions?
+
+#### OFFSET / LIMIT
+
+If you need to get `n` rows from the middle of a table, unless you have a really good reason to do so, please don't do this:
+
+```sql
+USE test;
+Database changed
+
+-- The alternate form (and, IMO, the clearer one) is LIMIT 10 OFFSET 500000
+mysql> SELECT * FROM ref_users LIMIT 500000,10;
++--------+------------+-----------+---------+
+| id     | first_name | last_name | user_id |
++--------+------------+-----------+---------+
+| 500001 | Cutlor     | Marlee    |  500001 |
+| 500002 | Schaper    | Tol       |  500002 |
+| 500003 | Toney      | Wait      |  500003 |
+| 500004 | Robbin     | Jordanson |  500004 |
+| 500005 | Weiner     | Mendelson |  500005 |
+| 500006 | Willow     | Joses     |  500006 |
+| 500007 | Weatherby  | Reginald  |  500007 |
+| 500008 | Frendel    | Hoxsie    |  500008 |
+| 500009 | Schonfeld  | Charmion  |  500009 |
+| 500010 | O'Doneven  | Theone    |  500010 |
++--------+------------+-----------+---------+
+10 rows in set (3.10 sec)
+```
+
+Doing this causes a table scan up to the specified offset. Far better, if you have a known monotonic number (like `id`), is to use a `WHERE` predicate (`WHERE` will be covered later in more detail):
+
+```sql
+mysql> SELECT * FROM ref_users WHERE id > 500000 LIMIT 10;
++--------+------------+-----------+---------+
+| id     | first_name | last_name | user_id |
++--------+------------+-----------+---------+
+| 500001 | Cutlor     | Marlee    |  500001 |
+| 500002 | Schaper    | Tol       |  500002 |
+| 500003 | Toney      | Wait      |  500003 |
+| 500004 | Robbin     | Jordanson |  500004 |
+| 500005 | Weiner     | Mendelson |  500005 |
+| 500006 | Willow     | Joses     |  500006 |
+| 500007 | Weatherby  | Reginald  |  500007 |
+| 500008 | Frendel    | Hoxsie    |  500008 |
+| 500009 | Schonfeld  | Charmion  |  500009 |
+| 500010 | O'Doneven  | Theone    |  500010 |
++--------+------------+-----------+---------+
+10 rows in set (0.01 sec)
+```
+
+Using `id` as the filter allows it to be used for an index range scan, which is nearly instant. If you were doing this programmatically to support pagination, the last value of `id` could be used for the next iteration's predicate.
+
+### TABLE
+
+[MySQL docs.](https://dev.mysql.com/doc/refman/8.0/en/table.html)
+
+`TABLE` is syntactic sugar for `SELECT * FROM <table>`.
+
+```sql
+mysql> TABLE users;
++----+------------+-----------+---------+------------------+
+| id | first_name | last_name | user_id | full_name        |
++----+------------+-----------+---------+------------------+
+|  1 | Stephan    | Garland   |      42 | Garland, Stephan |
++----+------------+-----------+---------+------------------+
+1 row in set (0.00 sec)
+```
+
+### WITH (Common Table Expressions)
+
+[MySQL docs.](https://dev.mysql.com/doc/refman/8.0/en/with.html)
+
+`WITH` can be used to create a temporary named result set, scoped to the statement in which it exists. They can also be recursive. A demonstration that's probably not useful in reality follows, but it does demonstrate how MySQL can be made to use indexes, even when it normally couldn't. Here, we're trying to select a random row from a large table. The row ID is selected with a sub-query that multiplies the output of `RAND()` (a float between 0-1) by the last `id` row in the table.
+
+```sql
+mysql>
+EXPLAIN ANALYZE SELECT 
+  * 
+FROM 
+  ref_users 
+WHERE 
+  id = (
+    SELECT 
+      FLOOR(
+        (
+          SELECT 
+            RAND() * (
+              SELECT 
+                id 
+              FROM 
+                ref_users 
+              ORDER BY 
+                id DESC 
+              LIMIT 
+                1
+            )
+        )
+      )
+  );
+*************************** 1. row ***************************
+EXPLAIN: -> Filter: (ref_users.id = floor((rand() * (select #4))))  (cost=10799.04 rows=99735) (actual time=1545.462..8220.073 rows=3 loops=1)
+    -> Table scan on ref_users  (cost=10799.04 rows=997354) (actual time=0.441..6723.994 rows=1000000 loops=1)
+    -> Select #4 (subquery in condition; run only once)
+        -> Limit: 1 row(s)  (cost=0.00 rows=1) (actual time=0.079..0.079 rows=1 loops=1)
+            -> Index scan on ref_users using PRIMARY (reverse)  (cost=0.00 rows=1) (actual time=0.077..0.077 rows=1 loops=1)
+
+1 row in set, 2 warnings (8.22 sec)
+```
+
+Since `RAND()` is evaluated for every row [when used with WHERE](https://dev.mysql.com/doc/refman/8.0/en/mathematical-functions.html#function_rand), it's not constant, and thus can't be used with indices. Also, you may wind up with more than one result!
+
+If instead the `RAND()` call is placed into a CTE, it can be optimized:
+
+```sql
+mysql>
+EXPLAIN ANALYZE
+WITH rand AS (
+  SELECT 
+    FLOOR(
+      (
+        SELECT 
+          RAND() * (
+            SELECT 
+              id 
+            FROM 
+              ref_users 
+            ORDER BY 
+              id DESC 
+            LIMIT 
+              1
+          )
+      )
+    )
+) 
+SELECT 
+  * 
+FROM 
+  ref_users 
+WHERE 
+  id IN (TABLE rand);
+*************************** 1. row ***************************
+EXPLAIN: -> Nested loop inner join  (cost=0.55 rows=1) (actual time=0.569..0.583 rows=1 loops=1)
+    -> Filter: (`<subquery2>`.`FLOOR((SELECT RAND() * (SELECT id FROM ref_users ORDER BY id DESC LIMIT 1)))` is not null)  (cost=0.20 rows=1) (actual time=0.085..0.095 rows=1 loops=1)
+        -> Table scan on <subquery2>  (cost=0.20 rows=1) (actual time=0.005..0.012 rows=1 loops=1)
+            -> Materialize with deduplication  (cost=0.00 rows=1) (actual time=0.082..0.090 rows=1 loops=1)
+                -> Filter: (rand.`FLOOR((SELECT RAND() * (SELECT id FROM ref_users ORDER BY id DESC LIMIT 1)))` is not null)  (cost=0.00 rows=1) (actual time=0.017..0.023 rows=1 loops=1)
+                    -> Table scan on rand  (cost=2.61 rows=1) (actual time=0.010..0.014 rows=1 loops=1)
+                        -> Materialize CTE rand  (cost=0.00 rows=1) (actual time=0.013..0.018 rows=1 loops=1)
+                            -> Rows fetched before execution  (cost=0.00 rows=1) (never executed)
+                            -> Select #5 (subquery in projection; run only once)
+                                -> Limit: 1 row(s)  (cost=0.00 rows=1) (actual time=0.313..0.314 rows=1 loops=1)
+                                    -> Index scan on ref_users using PRIMARY (reverse)  (cost=0.00 rows=1) (actual time=0.310..0.310 rows=1 loops=1)
+    -> Filter: (ref_users.id = `<subquery2>`.`FLOOR((SELECT RAND() * (SELECT id FROM ref_users ORDER BY id DESC LIMIT 1)))`)  (cost=0.35 rows=1) (actual time=0.477..0.479 rows=1 loops=1)
+        -> Single-row index lookup on ref_users using PRIMARY (id=`<subquery2>`.`FLOOR((SELECT RAND() * (SELECT id FROM ref_users ORDER BY id DESC LIMIT 1)))`)  (cost=0.35 rows=1) (actual time=0.468..0.469 rows=1 loops=1)
+
+1 row in set, 1 warning (0.00 sec)
+```
+
+## Stored Procedures
+
+[MySQL docs.](https://dev.mysql.com/doc/refman/8.0/en/create-procedure.html)
+
+Stored Procedures (and Stored Functions) are a way to write SQL as functions, to be called as needed. Most normal SQL queries are accepted, as well as conditionals, loops, and the ability to accept arguments and return values. The main difference between the two is that Stored Procedures may accept arguments and write out data to variables, whereas Stored Functions may accept arguments, and return a value.
+
+Their main advantage is that known, tested queries can be stored and later called from an application. Their main disadvantage is that they require people with reasonably good SQL skills to write them, else it's unlikely they'll exceed the performance of an ORM like Django.
+
+As an example, I used this to fill `zaps` with data:
+
+```sql
+DELIMITER // -- This is needed so that the individual commands don't end the stored procedure
+CREATE PROCEDURE insert_zaps(IN num_rows int, IN pct_shared float) -- Two input args are needed
+BEGIN
+  DECLARE loop_count bigint; -- Variables are initialized with a type
+  DECLARE len_table bigint;
+  DECLARE rand_base float;
+  DECLARE rand_offset float;
+  DECLARE rand_ts timestamp;
+  DECLARE rand_user bigint;
+  DECLARE shared_with_user bigint;
+  SELECT id INTO len_table FROM test.ref_users ORDER BY id DESC LIMIT 1; -- SELECT INTO can be used
+  SET loop_count = 1; -- Or, if the value is simple, simply assigned
+  WHILE loop_count <= num_rows DO
+    SET rand_base = RAND();
+    SET rand_offset = RAND();
+    SET rand_ts = TIMESTAMP(
+                    FROM_UNIXTIME(
+                      UNIX_TIMESTAMP(NOW()) - FLOOR(
+                        0 + (
+                          RAND() * 86400 * 365 * 10
+                        )
+                      )
+                    )
+                  ); -- This creates a random timestamp between now and 10 years ago
+    WITH rand AS (
+        SELECT 
+          FLOOR(
+            (
+              SELECT 
+                rand_base * len_table
+            )
+          )
+      ) 
+      SELECT 
+        id 
+      INTO rand_user
+      FROM 
+        test.ref_users 
+      WHERE 
+        id IN (TABLE rand); -- This is the CTE demonstrated earlier to determine the table length
+    INSERT INTO zaps (zap_id, created_at, owned_by) VALUES (loop_count, rand_ts, rand_user);
+    IF ROUND(rand_base, 1) > (1 - pct_shared) THEN -- Roughly determine the amount of shared Zaps
+      SELECT CAST(FLOOR(rand_base * rand_offset * len_table) AS unsigned) INTO shared_with_user;
+      UPDATE 
+        zaps 
+      SET 
+        shared_with = JSON_ARRAY_APPEND(
+          shared_with, 
+          '$', 
+          shared_with_user
+        ) -- JSON_ARRAY_APPEND(array, key, value)
+      WHERE 
+        id = loop_count;
+    END IF;
+    SET loop_count = loop_count + 1;
+  END WHILE;
+  END //
+  DELIMITER ;
+```
+
+## Joins
+
 ### Relational alegbra
 
 Not a lot of it, I promise; just what we need to discuss joins.
 
-* Union : `R ∪ S --- R OR S`
+* Union: `R ∪ S --- R OR S`
+  * Implemented in MySQL via the `UNION` keyword
 * Intersection: `R ∩ S --- R AND S`
+  * Implemented in MySQL via `INNER JOIN`, or in MySQL 8.0.31, the `INTERSECT` keyword
 * Difference: `R ≏ S --- R - S`
+  * Implemented in MySQL 8.0.31 via the `EXCEPT` keyword, and can be emulated using `UNION` and `NOT IN`
 
 If you're intersted in exploring relational alegbra, [this application](https://dbis-uibk.github.io/relax/calc/local/uibk/local/3) is quite useful to convert SQL to relational alegbra, and display the results.
 
-### Joins
+### Types of joins
 
 * Cartesian AKA Cross Join
   * Rarely used. This produces `n x m` rows for the two groups being joined.
@@ -1026,15 +1388,20 @@ When data is being returned to an application, the ordering of columns or their 
 
 ### Indices
 
-Indices, or indexes, _may_ speed up queries. Each table **should** have a primary key (it's not required, but, please don't do this), which is one index. Additional indices, on single or multiple columns, may be created. Most of them are stored in [B+ trees](https://en.wikipedia.org/wiki/B%2B_tree), which are similar to [B-trees](https://en.wikipedia.org/wiki/B-tree).
+Indices, or indexes, _may_ speed up queries. Each table **should** have a primary key (it's not required*, but, please don't do this), which is one index. Additional indices, on single or multiple columns, may be created. Most of them are stored in [B+ trees](https://en.wikipedia.org/wiki/B%2B_tree), which are similar to [B-trees](https://en.wikipedia.org/wiki/B-tree).
 
-Indices aren't free, however - when you create an index on a column, that column's values are copied to the aforementioned B+ tree. While disk space is relatively cheap, creating dozens of indices for columns that are infrequently queried should be avoided. Also, since `INSERTs` must also write to the index, they'll be slowed down somewhat.
+Indices aren't free, however - when you create an index on a column, that column's values are copied to the aforementioned B+ tree. While disk space is relatively cheap, creating dozens of indices for columns that are infrequently queried should be avoided. Also, since `INSERTs` must also write to the index, they'll be slowed down somewhat. Finally, InnoDB limits a given table to a maximum of 64 secondary indices (that is, other than primary keys).
+
+\* Prior to MySQL 8.0.30, if you don't create a primary key, the first `UNIQUE NOT NULL` index created is automatically promoted to become the primary key. If you don't have one of those either, the table will have no primary key. Starting with MySQL 8.0.30, if no primary key is declared, an invisible column will be created called `my_row_id` and set to be the primary key.
 
 #### Single indices
 
 We'll again look at the `test` schema, this time, the `ref_users` table. This table has 1 million rows, and was created by taking a [list of names](https://github.com/dominictarr/random-name/blob/master/names.txt) with 21985 rows, generating the schema with a program (as an aside, I got to play with C, which is always fun and frustrating), then loading it into the table. Since the table is two orders of magnitude larger than the input, there are obviously duplicated names, including some duplicated tuples of `first_name, last_name`. My table has nearly two orders of magnitude more duplicates than could be expected from a uniform distribution (962 duplicate tuples vs. the expected 45), which means my future as a statistician isn't great.
 
 ```sql
+mysql> USE test;
+Database changed
+
 mysql> SELECT * FROM ref_users WHERE last_name = 'Safko';
 +--------+------------+-----------+---------+
 | id     | first_name | last_name | user_id |
@@ -1084,6 +1451,68 @@ mysql> SELECT * FROM ref_users WHERE first_name = 'Safko';
 
 The lookup is now essentially instantaneous. If this is a frequently performed query, this may be a wise decision.
 
+#### JSON / Longtext
+
+JSON has its own special requirements to be indexed, mostly if you're storing strings. First, you must select a specific part of the column's rows to be the indexed key, known as a functional key part. Additionally, the key has to have a prefix length assigned to it, but functional key parts don't allow that. Finally if you `CAST(foo) AS CHAR(n)` the selected part so the index is stored properly, the returned string has the `utf8mb4_0900_ai_ci` collation, but `JSON_UNQUOTE()` (which is done implicitly as part of selecting a part of a row to be indexed) has the `utf8mb4_bin` collation. The easiest workaround is to specify the latter's collation as part of the index creation. Also, this requires the stored data to be `k:v` objects, rather than arrays.
+
+```sql
+mysql>
+CREATE INDEX owned_idx ON zaps (
+  (
+    CAST(
+      used_by ->> "$.user_id" AS CHAR(16)
+    ) COLLATE utf8mb4_bin
+  )
+);
+Query OK, 0 rows affected (0.50 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+```
+
+Alternatively, if the key you want to index can be cast to an `int`, you can use generated columns to accomplish this; you can even (as of MySQL 8.0.23) make them invisible so they don't show up for normal queries:
+
+```sql
+mysql>
+ALTER TABLE 
+  zaps 
+ADD 
+  COLUMN used_by_idx_col BIGINT UNSIGNED GENERATED ALWAYS AS (
+    CAST(
+      used_by ->> "$.user_id" AS UNSIGNED
+    )
+  ) INVISIBLE;
+Query OK, 0 rows affected (0.09 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+
+mysql> CREATE INDEX used_by_idx ON zaps (used_by_idx_col);
+Query OK, 0 rows affected (0.36 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+```
+
+This creates an invisible column `used_by_idx_col` which automatically generates a value based on the key `user_id` in the column `used_by`, casting it to an `UNSIGNED BIGINT`. The column is invisible unless specified:
+
+```sql
+mysql> SELECT * FROM zaps\G
+*************************** 1. row ***************************
+             id: 1
+         zap_id: 1
+     created_at: 2022-12-30 11:46:04
+last_updated_at: NULL
+       owned_by: 42
+        used_by: {"user_id": "42"}
+1 row in set (0.00 sec)
+
+mysql> SELECT *, used_by_idx_col  FROM zaps\G
+*************************** 1. row ***************************
+             id: 1
+         zap_id: 1
+     created_at: 2022-12-30 11:46:04
+last_updated_at: NULL
+       owned_by: 42
+        used_by: {"user_id": "42"}
+used_by_idx_col: 42
+1 row in set (0.00 sec)
+```
+
 #### Composite indices
 
 An index can also be created across multiple columns - for InnoDB, up to 16.
@@ -1094,7 +1523,7 @@ Query OK, 0 rows affected (40.09 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 ```
 
-First, we'll use `IGNORE INDEX` to direct SQL to ignore the index we just created. This query counts the duplicate name tuples. Since the `id` is being included, and `GROUPing` it would result in an empty set (as it's the PK, and thus guaranteed to be unique), `ANY VALUE` must be specified to let MySQL know that the result can be non-deterministic. Finally, `EXPLAIN ANALYZE` is being used to run the query, and explain what it's doing. This differs from `EXPLAIN`, which guesses at what would be done, but doesn't actually perform the query. Be careful using `EXPLAIN ANALYZE`, especially with destructive actions, since those queries will actually be performed!
+First, we'll use `IGNORE INDEX` to direct SQL to ignore the index we just created. This query counts the duplicate name tuples. Since the `id` is being included, and `GROUPing` it would result in an empty set (as it's the primary key, and thus guaranteed to be unique), `ANY VALUE` must be specified to let MySQL know that the result can be non-deterministic. Finally, `EXPLAIN ANALYZE` is being used to run the query, and explain what it's doing. This differs from `EXPLAIN`, which guesses at what would be done, but doesn't actually perform the query. Be careful using `EXPLAIN ANALYZE`, especially with destructive actions, since those queries will actually be performed!
 
 ```sql
 mysql>
@@ -1215,6 +1644,11 @@ EXPLAIN: -> Index lookup on ref_users using full_name (first_name='Zoltai', last
 ### Predicates
 
 For these, we'll shift back to the `northwind` schema.
+
+```sql
+mysql> USE northwind;
+Database changed
+```
 
 #### WHERE
 
@@ -1352,7 +1786,7 @@ possible_keys: city
 
 #### HAVING
 
-Earlier, we used `HAVING` in a `GROUP BY` aggregation. The difference between the two is that `WHERE` filters the results before they're sent to be aggregated, whereas `HAVING` filters the aggregation, and thus predicates relying on the aggregation result can be used. It's not limited to only aggregation results, though - a common use case is to allow the use of aliases or subquery results in filtering.
+Earlier, we used `HAVING` in a `GROUP BY` aggregation. The difference between the two is that `WHERE` filters the results before they're sent to be aggregated, whereas `HAVING` filters the aggregation, and thus predicates relying on the aggregation result can be used. It's not limited to only aggregation results, though - a common use case is to allow the use of aliases or subquery results in filtering. Be aware that it's generally more performant to use `WHERE` if possible (consider re-writing your query if it isn't).
 
 ```sql
 mysql>
@@ -1502,3 +1936,11 @@ EXPLAIN: -> Nested loop inner join  (cost=6.33 rows=0) (actual time=1.645..8.714
 
 Although difficult to see here with the small tables, generally `JOINs` are to be preferred over sub-queries, as they're typically more performant.
 
+## Cleanup
+
+This isn't something you'll do often, if at all, so may as well do so now, eh?
+
+```sql
+mysql> DROP SCHEMA foo;
+Query OK, 0 rows affected (0.05 sec)
+```
