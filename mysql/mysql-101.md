@@ -4,57 +4,6 @@
 
 Structured Query Language. It's a domain-specific language designed to manage data in a Relational Database Management System (RDBMS). It's been extended and updated many times, both in its official ANSI definition, and in implementations of it like MySQL and PostgreSQL.
 
-### What is MySQL?
-
-It's an extremely popular row-based relational database implementing and extending ANSI SQL. It's unfortunately owned by Oracle, but if you'd prefer, the MariaDB fork is essentially the same thing.
-
-### How is it pronounced?
-
-Officially, "My Ess Que Ell," but since the SQL language was originally called SEQUEL ("Structured English Query Language"), and only changed due to trademark issues, I feel at ease saying "My Sequel." However, this tends to bring out pedants who love to haughtily correct your pronunciation, so do what you will. For what it's worth, I also pronounce kubectl (the Kubernetes CLI tool) as "kube cuddle," so I may not be the greatest influence.
-
-### What is PostgreSQL?
-
-It's another extremely popular row-based (but not always) relational database implementing and extending ANSI SQL. There are many forks and plugins, which allow it to perform a variety of roles that strict SQL would struggle with.
-
-### How is it prounounced?
-
-"Post Gres Que Ell," but it's also common and acceptable to drop the suffix and say "Post Gres," written Postgres.
-
-## Basic definitions
-
-### SQL sub-languages
-
-All of these can be grouped as SQL, and some of them can also be combined - `DQL` is often merged with `DML`, for example. Knowing that `DML` is generally operating on a single record at a time (but may be batched), and that `DDL` is generally operating on an entire table or schema at a time suffices for now.
-
-* DCL
-  * Data Control Language. `GRANT`, `REVOKE`.
-* DDL
-  * Data Definition Language. `ALTER`, `CREATE`, `DROP`, `TRUNCATE`.
-* DML
-  * Data Manipulation Language. `CALL`, `DELETE`, `INSERT`, `LOCK`, `SELECT (with FROM or WHERE)`, `UPDATE`.
-* DQL
-  * Data Query Language. `SELECT`.
-* TCL
-  * Transaction Control Language. `COMMIT`, `ROLLBACK`, `SAVEPOINT`.
-
-### Other definitions
-
-* B+ tree
-  * An `_m_-ary tree`  data structure that is self-balancing, with a variable number of children per node. It differs from the `B-tree` in that an individual data node can have either keys or children, but not both. It has `O(log(n))` time complexity for insertion, search, and deletion. It is frequently used both for filesystems and for RDBMS.
-* Block
-  * The lowest reasonable level of data storage (above individual bits). Historically sized at 512 bytes due to hard drive sector sizes, but generally sized at 4 KiB in modern drives, and SSDs. Enterprise drives sometimes have 520 byte block sizes (or 4160 bytes for the 4 KiB-adjacent size), with the extra 8 bytes being used for data integrity calculations.
-* Filesystem
-  * A method for the operating system to store data. May include features like copy-on-write, encryption, journaling, pre-allocation, SSD management, volume management, and more. Modern examples include APFS (default for Apple products), ext4 (default for most Linux distributions), NTFS (default for Windows), XFS (default for Red Hat and its downstream), and ZFS (default for FreeBSD).
-* Schema
-  * A logical grouping of database objects, e.g. tables, indices, etc. Often called a database, but technically, the database may contain any number of schemas, each with its own unique (or shared!) set of data, access policies, etc.
-* Table
-  * A logical grouping of data, of varying or similar types. May contain constraints, indices, etc.
-* Tablespace
-  * The link between the logical storage layer (tables, indices) and the physical storage layer (the disk's filesystem). This is an actual file that exists on the disk, contained in `$MYSQL_DATA_DIR`, nominally `/var/lib/mysql`.
-    * As an aside, this fact, combined with [RDS MySQL file size limits](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/MySQL.KnownIssuesAndLimitations.html#MySQL.Concepts.Limits.FileSize) yields some interesting information about RDS. Since they used to (anything created before April 2014) limit a table to 2 TiB*, that means that they were using ext3, as that is its maximum file size. Instances created after April 2014 are limited to 16 TiB* files, indicating that they are probably now using ext4, as that is generally its maximum file size. 16 TB is also the limit for InnoDB with 4 KB InnoDB page sizes, so it's possible the underlying disk's filesystem is XFS or something else, but since that value defaults to 16 KB, it seems unlikely.
-
-\* AWS' docs state that the limits are in TB (terabytes) instead of TiB (tebibytes). It's possible that their VM subsystem limits the size to n TB, but the actual filesystem is capable of n TiB.
-
 ## What is a relational database?
 
 It's what most people probably think of when they think of a database. Broadly speaking, data is related to other data in some manner. For example, observe these two tables (tl;dr a logical grouping of data):
@@ -107,6 +56,49 @@ ACID is a set of four properties that, if implemented correctly, guarantee data 
   * Once a transaction is committed, it must remain committed in the event of a system failure.
 
 Note that the lack of one or more of these properties does not necessarily mean that data committed is invalid, only that the guarantees granted by that particular property must be accounted for elsewhere. A common counter-example of this is Eventual Consistency with distributed systems.
+
+### What is MySQL?
+
+It's an extremely popular row-based relational database implementing and extending ANSI SQL. It's unfortunately owned by Oracle, but if you'd prefer, the MariaDB fork is essentially the same thing.
+
+#### How is it pronounced?
+
+Officially, "My Ess Que Ell," but since the SQL language was originally called SEQUEL ("Structured English Query Language"), and only changed due to trademark issues, I feel at ease saying "My Sequel." However, this tends to bring out pedants who love to haughtily correct your pronunciation, so do what you will. For what it's worth, I also pronounce kubectl (the Kubernetes CLI tool) as "kube cuddle," so I may not be the greatest influence.
+
+## Basic definitions
+
+### SQL sub-languages
+
+All of these can be grouped as SQL, and some of them can also be combined - `DQL` is often merged with `DML`, for example. Knowing that `DML` is generally operating on a single record at a time (but may be batched), and that `DDL` is generally operating on an entire table or schema at a time suffices for now.
+
+* DCL
+  * Data Control Language. `GRANT`, `REVOKE`.
+* DDL
+  * Data Definition Language. `ALTER`, `CREATE`, `DROP`, `TRUNCATE`.
+* DML
+  * Data Manipulation Language. `CALL`, `DELETE`, `INSERT`, `LOCK`, `SELECT (with FROM or WHERE)`, `UPDATE`.
+* DQL
+  * Data Query Language. `SELECT`.
+* TCL
+  * Transaction Control Language. `COMMIT`, `ROLLBACK`, `SAVEPOINT`.
+
+### Other definitions
+
+* B+ tree
+  * An `_m_-ary tree`  data structure that is self-balancing, with a variable number of children per node. It differs from the `B-tree` in that an individual data node can have either keys or children, but not both. It has `O(log(n))` time complexity for insertion, search, and deletion. It is frequently used both for filesystems and for RDBMS.
+* Block
+  * The lowest reasonable level of data storage (above individual bits). Historically sized at 512 bytes due to hard drive sector sizes, but generally sized at 4 KiB in modern drives, and SSDs. Enterprise drives sometimes have 520 byte block sizes (or 4160 bytes for the 4 KiB-adjacent size), with the extra 8 bytes being used for data integrity calculations.
+* Filesystem
+  * A method for the operating system to store data. May include features like copy-on-write, encryption, journaling, pre-allocation, SSD management, volume management, and more. Modern examples include APFS (default for Apple products), ext4 (default for most Linux distributions), NTFS (default for Windows), XFS (default for Red Hat and its downstream), and ZFS (default for FreeBSD).
+* Schema
+  * A logical grouping of database objects, e.g. tables, indices, etc. Often called a database, but technically, the database may contain any number of schemas, each with its own unique (or shared!) set of data, access policies, etc.
+* Table
+  * A logical grouping of data, of varying or similar types. May contain constraints, indices, etc.
+* Tablespace
+  * The link between the logical storage layer (tables, indices) and the physical storage layer (the disk's filesystem). This is an actual file that exists on the disk, contained in `$MYSQL_DATA_DIR`, nominally `/var/lib/mysql`.
+    * As an aside, this fact, combined with [RDS MySQL file size limits](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/MySQL.KnownIssuesAndLimitations.html#MySQL.Concepts.Limits.FileSize) yields some interesting information about RDS. Since they used to (anything created before April 2014) limit a table to 2 TiB*, that means that they were using ext3, as that is its maximum file size. Instances created after April 2014 are limited to 16 TiB* files, indicating that they are probably now using ext4, as that is generally its maximum file size. 16 TB is also the limit for InnoDB with 4 KB InnoDB page sizes, so it's possible the underlying disk's filesystem is XFS or something else, but since that value defaults to 16 KB, it seems unlikely.
+
+\* AWS' docs state that the limits are in TB (terabytes) instead of TiB (tebibytes). It's possible that their VM subsystem limits the size to n TB, but the actual filesystem is capable of n TiB.
 
 # MySQL Components
 
@@ -1047,7 +1039,7 @@ Stored Procedures (and Stored Functions) are a way to write SQL as functions, to
 
 Their main advantage is that known, tested queries can be stored and later called from an application. Their main disadvantage is that they require people with reasonably good SQL skills to write them, else it's unlikely they'll exceed the performance of an ORM like Django.
 
-As an example, I used this to fill `zaps` with data:
+As an example, I used this to fill `zaps` with data (NOTE: this is not an example of a well-designed stored procedure, merely one that demonstrates a variety of concepts):
 
 ```sql
 DELIMITER // -- This is needed so that the individual commands don't end the stored procedure
