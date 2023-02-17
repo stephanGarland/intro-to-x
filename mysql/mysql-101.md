@@ -552,7 +552,7 @@ mysql> SHOW COLUMNS FROM zaps;
 6 rows in set (0.04 sec)
 ```
 
-Did you know that [MySQL supports JSON](https://dev.mysql.com/doc/refman/8.0/en/json.html) as a data type? Since 5.7.8, in fact!
+Did you know that [MySQL supports JSON](https://dev.mysql.com/doc/refman/8.0/en/json.html) as a data type? While you can of course simply store JSON strings in a text column, there are some benefits to using the native JSON datatype; among them that you can index scalars from the JSON objects, and that you can extract specific keys/values from the objects instead of the entire string.
 
 #### Data types
 
@@ -1710,7 +1710,7 @@ for tuple_i in dict_table_1.items():
 
 While this looks very similar, there are details I've glossed over about the partioning method (it's recursive), and of course hash lookups are (optimally) `O(1)`, which speeds things up tremendously. The total time complexity for this method is `3(M+N)`.
 
-MySQL [added a hash join in 8.0.18](https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/), but it comes with some limitations; chiefly that a table must fit into memory, and annoyingly, that the optimizer will often decide to use a nested loop if indexes exist. If it can be used, thoughh, compare the difference:
+MySQL [added a hash join in 8.0.18](https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/), but it comes with some limitations; chiefly that a table must fit into memory, and annoyingly, that the optimizer will often decide to use a nested loop if indexes exist. If it can be used, though, compare the difference:
 
 ```sql
 mysql>
@@ -2140,7 +2140,9 @@ Using `id` as the filter allows it to be used for an index range scan, which is 
 
 ### DISTINCT
 
-`DISTINCT` is a very useful keyword for many operations when you want to not show duplicates. Unfortunately, it also adds a fairly hefty load to the database. That's not to say you _can't_ use it, but when writing code that will end up using this, ask yourself if you could intead handle de-duplication in the application. This also comes with tradeoffs, of course - you're now pulling more data over the network, and increasing load on the application. This may also be something that works well with one or the other mechanism early on, but as either the database or application grows, becomes unwieldy.
+`DISTINCT` is a very useful keyword for many operations when you want to not show duplicates. Unfortunately, it also adds a fairly hefty load to the database. That's not to say you _can't_ use it, but when writing code that will end up using this, ask yourself if you could intead handle de-duplication in the application. This also comes with tradeoffs, of course - you're now pulling more data over the network, and increasing load on the application. Generally speaking, databases are bound first by disk and memory, rather than CPU or network, so using compression (increased CPU load) and/or sending more data (not using `DISTINCT`) tends to increase overall performance, but you should experiment and profile your code.
+
+This also tends to be something that works well early on with little load, but as either the database or application grows, it becomes unwieldy.
 
 ```sql
 mysql>
