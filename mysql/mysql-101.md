@@ -83,21 +83,20 @@ mysql> SHOW COLUMNS FROM users;
 ```
 
 ```sql
-mysql> SHOW COLUMNS FROM zaps;
-+-----------------+-----------+------+-----+---------+----------------+
-| Field           | Type      | Null | Key | Default | Extra          |
-+-----------------+-----------+------+-----+---------+----------------+
-| id              | bigint    | NO   | PRI | NULL    | auto_increment |
-| zap_id          | bigint    | NO   | UNI | NULL    |                |
-| created_at      | timestamp | YES  |     | NULL    |                |
-| last_updated_at | timestamp | YES  |     | NULL    |                |
-| owned_by        | bigint    | NO   |     | NULL    |                |
-| used_by         | bigint    | NO   |     | NULL    |                |
-+-----------------+-----------+------+-----+---------+----------------+
-6 rows in set (0.02 sec)
++-----------------+-----------------+------+-----+--------------+-------------------+
+| Field           | Type            | Null | Key | Default      | Extra             |
++-----------------+-----------------+------+-----+--------------+-------------------+
+| id              | bigint unsigned | NO   | PRI | NULL         | auto_increment    |
+| zap_id          | bigint unsigned | NO   | UNI | NULL         |                   |
+| created_at      | timestamp       | NO   |     | NULL         |                   |
+| last_updated_at | timestamp       | YES  |     | NULL         |                   |
+| owned_by        | bigint unsigned | NO   |     | NULL         |                   |
+| shared_with     | json            | YES  |     | json_array() | DEFAULT_GENERATED |
++-----------------+-----------------+------+-----+--------------+-------------------+
+6 rows in set (0.04 sec)
 ```
 
-Table `users` has four columns - `id`, `first_name`, `last_name`, and `user_id`. Table `zaps` has six columns - `id`, `zap_id`, `created_at`, `last_updated_at`, `owned_by`, and `used_by`.
+Table `users` has four columns - `id`, `first_name`, `last_name`, and `user_id`. Table `zaps` has six columns - `id`, `zap_id`, `created_at`, `last_updated_at`, `owned_by`, and `shared_with`.
 
 Although it isn't explicitly defined or enforced, there is an implicit relationship between these two tables via `users.user_id` and `zaps.owned_by`. Thus, a query like `SELECT zap_id, owned_by FROM zaps JOIN users ON user_id = owned_by;` could use that relationship. Ideally, there would be additional constraints like foreign keys established to ensure referential integrity, but this example suffices for now.
 
@@ -529,30 +528,41 @@ In general, column ordering in a table doesn't tremendously matter for MySQL (bu
 ```sql
 mysql>
 CREATE TABLE zaps (
-  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
-  zap_id BIGINT UNSIGNED NOT NULL UNIQUE,
-  created_at TIMESTAMP NOT NULL,
-  last_updated_at TIMESTAMP,
-  owned_by BIGINT UNSIGNED NOT NULL,
-  used_by JSON NOT NULL
+  `id` BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  `zap_id` BIGINT UNSIGNED NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT NOW(),
+  `last_updated_at` TIMESTAMP NULL ON UPDATE NOW(),
+  `owned_by` BIGINT UNSIGNED NOT NULL,
+  `shared_with` JSON DEFAULT (
+    JSON_ARRAY()
+  ),
+  UNIQUE(zap_id)
 );
-Query OK, 0 rows affected (0.24 sec)
 
 mysql> SHOW COLUMNS FROM zaps;
-+-----------------+-----------------+------+-----+---------+----------------+
-| Field           | Type            | Null | Key | Default | Extra          |
-+-----------------+-----------------+------+-----+---------+----------------+
-| id              | bigint unsigned | NO   | PRI | NULL    | auto_increment |
-| zap_id          | bigint unsigned | NO   | UNI | NULL    |                |
-| created_at      | timestamp       | NO   |     | NULL    |                |
-| last_updated_at | timestamp       | YES  |     | NULL    |                |
-| owned_by        | bigint unsigned | NO   |     | NULL    |                |
-| used_by         | json            | NO   |     | NULL    |                |
-+-----------------+-----------------+------+-----+---------+----------------+
-6 rows in set (0.04 sec)
++-----------------+-----------------+------+-----+-------------------+-----------------------------+
+| Field           | Type            | Null | Key | Default           | Extra                       |
++-----------------+-----------------+------+-----+-------------------+-----------------------------+
+| id              | bigint unsigned | NO   | PRI | NULL              | auto_increment              |
+| zap_id          | bigint unsigned | NO   | UNI | NULL              |                             |
+| created_at      | timestamp       | NO   |     | CURRENT_TIMESTAMP | DEFAULT_GENERATED           |
+| last_updated_at | timestamp       | YES  |     | NULL              | on update CURRENT_TIMESTAMP |
+| owned_by        | bigint unsigned | NO   |     | NULL              |                             |
+| shared_with     | json            | YES  |     | json_array()      | DEFAULT_GENERATED           |
++-----------------+-----------------+------+-----+-------------------+-----------------------------+
+6 rows in set (0.02 sec)
 ```
 
-Did you know that [MySQL supports JSON](https://dev.mysql.com/doc/refman/8.0/en/json.html) as a data type? While you can of course simply store JSON strings in a text column, there are some benefits to using the native JSON datatype; among them that you can index scalars from the JSON objects, and that you can extract specific keys/values from the objects instead of the entire string.
+We're introducing some new things here. In no particular order:
+* A JSON column
+  * [MySQL supports JSON](https://dev.mysql.com/doc/refman/8.0/en/json.html) as a data type! While you can of course simply store JSON strings in a text column, there are some benefits to using the native JSON datatype; among them that you can index scalars from the JSON objects, and that you can extract specific keys/values from the objects instead of the entire string.
+  * Please don't use this as an excuse to treat MySQL as a Document DB, though. If you want NoSQL, you should use NoSQL. RDBMS are optimized for relations. Storing some information in JSON is fine, but it shouldn't be the default.
+* DEFAULT NOW()
+  * With this, much like an `AUTO INCREMENTING` column, the current timestamp will be added to the `created_at` column when a new row is created. NOTE: This doesn't make the column immutable, and nothing stops someone from altering this value manually later.
+* ON UPDATE NOW()
+  * For `last_updated_at`, while the default is `NULL`, whenever the row is updated, the current timestamp is added.
+
+`NOW()` is an alias for `CURRENT_TIMESTAMP`, and no, I didn't forget the function call on the right. For historical reasons, `CURRENT_TIMESTAMP` may be called with or without parentheses, but `NOW()` requires them. Similarly, generally any default value being declared that isn't a literal (e.g. `0`, `NULL`, etc.) is required to be wrapped in parentheses - see `(JSON_ARRAY())`. Again, for historical reasons, `TIMESTAMP` and `DATETIME` columns don't require this. Also, `JSON` _requires_ its default value to be wrapped in parentheses, even if the default is a literal (as do `BLOB`, `GEOMETRY`, and `TEXT`). See [MySQL docs on defaults](https://dev.mysql.com/doc/refman/8.0/en/data-type-defaults.html) for more information on this behavior, and [MySQL docs on timestamp initialization](https://dev.mysql.com/doc/refman/8.0/en/timestamp-initialization.html) for more information on timestamp column defaults.
 
 #### Data types
 
@@ -620,14 +630,14 @@ mysql> SHOW WARNINGS\G
 *************************** 1. row ***************************
   Level: Warning
    Code: 1831
-Message: Duplicate index 'user_id_2' defined on the table 'test.users'. This is deprecated and will be disallowed in a future release.
+Message: Duplicate index 'user_id' defined on the table 'test.users'. This is deprecated and will be disallowed in a future release.
 1 row in set (0.00 sec)
 ```
 
 Ah - constraints like `UNIQUE` don't have to be redefined along with the rest of the column definition, and in doing so, we've duplicated a constraint. While allowed for now, it's not a good practice, so we'll get rid of it.
 
 ```sql
-mysql> ALTER TABLE users DROP CONSTRAINT user_id_2;
+mysql> ALTER TABLE users DROP CONSTRAINT uid;
 Query OK, 0 rows affected (0.16 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 
@@ -660,23 +670,27 @@ VALUES
   ('Stephan', 'Garland', 1);
 Query OK, 1 row affected (0.02 sec)
 
-mysql>
-INSERT INTO zaps (
-  zap_id, created_at, last_updated_at,
-  owned_by, used_by
-)
-VALUES
-  (1, NOW(), NOW(), 1, 1);
-Query OK, 1 row affected (0.02 sec)
+mysql> INSERT INTO zaps (zap_id, owned_by) VALUES (1, 1);
+Query OK, 1 row affected (0.03 sec)
+
+mysql> TABLE zaps;
++----+--------+---------------------+-----------------+----------+-------------+
+| id | zap_id | created_at          | last_updated_at | owned_by | shared_with |
++----+--------+---------------------+-----------------+----------+-------------+
+|  1 |      1 | 2023-02-21 12:34:35 | NULL            |        1 | []          |
++----+--------+---------------------+-----------------+----------+-------------+
+1 row in set (0.01 sec)
 ```
 
 We can `JOIN` on this if we want.
 
 ```sql
 mysql>
-SELECT * FROM users
-  JOIN zaps ON
-    users.user_id = zaps.owned_by\G
+SELECT
+  *
+FROM
+  users
+  JOIN zaps ON users.user_id = zaps.owned_by\G
 *************************** 1. row ***************************
              id: 1
      first_name: Stephan
@@ -684,11 +698,12 @@ SELECT * FROM users
         user_id: 1
              id: 1
          zap_id: 1
-     created_at: 2022-12-21 15:15:40
-last_updated_at: 2022-12-21 15:15:40
+     created_at: 2023-02-21 13:03:33
+last_updated_at: NULL
        owned_by: 1
-        used_by: 1
+    shared_with: []
 1 row in set (0.00 sec)
+
 ```
 
 That's all well and good, but what if I want to delete my account? Wouldn't it be nice if devs didn't have to worry about deleting every trace of my existence? Or what if everyone's user ID has to change for a migration? Enter foreign keys.
@@ -712,10 +727,10 @@ mysql> SHOW CREATE TABLE zaps\G
 Create Table: CREATE TABLE `zaps` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `zap_id` bigint unsigned NOT NULL,
-  `created_at` timestamp NOT NULL,
-  `last_updated_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `last_updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
   `owned_by` bigint unsigned NOT NULL,
-  `used_by` bigint unsigned NOT NULL,
+  `shared_with` json DEFAULT (json_array()),
   PRIMARY KEY (`id`),
   UNIQUE KEY `zap_id` (`zap_id`),
   KEY `owned_by` (`owned_by`),
@@ -738,17 +753,18 @@ SELECT * FROM users
   JOIN zaps ON
     users.user_id = zaps.owned_by\G
 *************************** 1. row ***************************
+*************************** 1. row ***************************
              id: 1
      first_name: Stephan
       last_name: Garland
         user_id: 9
              id: 1
          zap_id: 1
-     created_at: 2022-12-21 15:15:40
-last_updated_at: 2022-12-21 15:15:40
+     created_at: 2023-02-21 13:03:33
+last_updated_at: NULL
        owned_by: 9
-        used_by: 1
-1 row in set (0.00 sec)
+    shared_with: []
+1 row in set (0.01 sec)
 ```
 
 And just like that, `zaps` has updated its `owned_by` value for that Zap to equal the new value in `users`. And if we delete the `users` entry, the same `CASCADE` action will follow.
@@ -935,11 +951,100 @@ mysql> SET GLOBAL innodb_stats_on_metadata = @old_innodb_stats_on_metadata;
 
 You use it to select data from tables (or `/dev/stdin`). Any questions?
 
+
+### INSERT
+
+[MySQL docs.](https://dev.mysql.com/doc/refman/8.0/en/insert.html)
+
+
+`INSERT` is used to insert rows into a table. There is also an `UPSERT` equivalent, with the `ON DUPLICATE KEY UPDATE` clause. With this, if an `INSERT` would cause a key collision with a `UNIQUE` index (explicit or implicit, e.g. `PRIMARY KEY`), then an `UPDATE` of that row occurs instead.
+
+```sql
+mysql> INSERT INTO users (first_name, last_name, user_id)
+VALUES
+  ("Leeroy", "Jenkins", 42);
+ERROR 1062 (23000): Duplicate entry '42' for key 'users.user_id'
+
+mysql> INSERT INTO users (first_name, last_name, user_id)
+VALUES
+  ("Leeroy", "Jenkins", 42) ON DUPLICATE KEY
+UPDATE
+  first_name =
+VALUES
+  (first_name),
+  last_name =
+VALUES
+  (last_name);
+Query OK, 2 rows affected, 2 warnings (0.02 sec)
+
+mysql> SHOW WARNINGS\G
+*************************** 1. row ***************************
+  Level: Warning
+   Code: 1287
+Message: 'VALUES function' is deprecated and will be removed in a future release.
+Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col)
+in the ON DUPLICATE KEY UPDATE clause with alias.col instead
+*************************** 2. row ***************************
+  Level: Warning
+   Code: 1287
+Message: 'VALUES function' is deprecated and will be removed in a future release.
+Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col)
+in the ON DUPLICATE KEY UPDATE clause with alias.col instead
+2 rows in set (0.00 sec)
+
+mysql> TABLE users;
++----+------------+-----------+---------+-----------------+
+| id | first_name | last_name | user_id | full_name       |
++----+------------+-----------+---------+-----------------+
+|  1 | Leeroy     | Jenkins   |      42 | Jenkins, Leeroy |
++----+------------+-----------+---------+-----------------+
+1 row in set (0.00 sec)
+```
+
+There's a deprecation warning, so we can do this again as it asked us to:
+
+```mysql
+mysql> INSERT INTO users (first_name, last_name, user_id)
+VALUES
+  ("Stephan", "Garland", 42) AS vals ON DUPLICATE KEY
+UPDATE
+  first_name = vals.first_name,
+  last_name = vals.last_name;
+Query OK, 2 rows affected (0.04 sec)
+
+mysql> TABLE users;
++----+------------+-----------+---------+------------------+
+| id | first_name | last_name | user_id | full_name        |
++----+------------+-----------+---------+------------------+
+|  1 | Stephan    | Garland   |      42 | Garland, Stephan |
++----+------------+-----------+---------+------------------+
+1 row in set (0.01 sec)
+```
+
+Now, let's add Leeroy back in with his own unique `user_id`:
+
+```mysql
+mysql> INSERT INTO users (first_name, last_name, user_id)
+  VALUES ("Leeroy", "Jenkins", 6);
+Query OK, 1 row affected (0.09 sec)
+
+mysql> TABLE users;
++----+------------+-----------+---------+------------------+
+| id | first_name | last_name | user_id | full_name        |
++----+------------+-----------+---------+------------------+
+|  1 | Stephan    | Garland   |      42 | Garland, Stephan |
+|  5 | Leeroy     | Jenkins   |       6 | Jenkins, Leeroy  |
++----+------------+-----------+---------+------------------+
+2 rows in set (0.00 sec)
+```
+
+An interesting thing has happened here with `id` (an `AUTO INCREMENTING` column). Even though we've only added one new row, and updated the existing one twice, `id` is now set to 5. This is because every `INSERT`, regardless of its success, causes the value to increment. If you add up the statements, you'll find the initial insertion (`1`), a failed insertion (`2`), two implicit `UPDATE` (`3-4`), and finally the new entry (`5`).
+
 ### TABLE
 
 [MySQL docs.](https://dev.mysql.com/doc/refman/8.0/en/table.html)
 
-`TABLE` is syntactic sugar for `SELECT * FROM <table>`.
+`TABLE` is syntactic sugar for `SELECT * FROM <table>`. Works great if you know the table is small, but be careful on large tables!
 
 ```sql
 mysql> TABLE users;
