@@ -1,6 +1,6 @@
-# Prerequisites
 <!-- vim-markdown-toc GFM -->
 
+* [Prerequisites](#prerequisites)
 * [Introduction](#introduction)
   * [What is SQL?](#what-is-sql)
   * [What is a relational database?](#what-is-a-relational-database)
@@ -57,14 +57,10 @@
       * [When indicies aren't helpful](#when-indicies-arent-helpful)
     * [Predicates](#predicates)
       * [WHERE](#where)
-      * [HAVING](#having)
-  * [Query optimization](#query-optimization)
-    * [SELECT *](#select-)
-    * [OFFSET / LIMIT](#offset--limit)
-    * [DISTINCT](#distinct)
-  * [Cleanup](#cleanup)
 
 <!-- vim-markdown-toc -->
+
+# Prerequisites
 
 You'll need to have a MySQL client. In no particular order, options are [DBeaver](https://dbeaver.io/) (GUI), [MySQL Workbench](https://www.mysql.com/products/workbench/) (GUI), [mysql-client](https://dev.mysql.com/doc/refman/8.0/en/mysql.html) (TUI), and others. Note that the server is currently using a self-signed TLS certificate, which some clients may complain about. MySQL Workbench and msyql-client are proven to work without issue. Also note that mysql-client is available via [Homebrew](https://formulae.brew.sh/formula/mysql-client), but it won't symlink by default, so you'll need to do something like `brew link --force mysql-client`.
 
@@ -1774,9 +1770,6 @@ It's worth noting here that thus far, we've avoided using specifying the table f
 
 ```sql
 SELECT
-```
-
-```sql
   CONCAT_WS(', ', last_name, first_name) AS name,
   job_title
 FROM
@@ -1810,16 +1803,15 @@ The above query isn't tremendously useful, of course, since it ambiguously names
 
 ```sql
 SELECT
-```
-
-```sql
   CONCAT_WS(', ', s.last_name, s.first_name) AS supplier_name,
   s.job_title,
   CONCAT_WS(', ', e.last_name, e.first_name) AS employee_name
 FROM
   suppliers s
   JOIN employees e ON s.job_title = e.job_title;
+```
 
+```sql
 +-----------------------------+----------------------+----------------------+
 | supplier_name               | job_title            | employee_name        |
 +-----------------------------+----------------------+----------------------+
@@ -1866,8 +1858,10 @@ USE test;
 
 ```sql
 Database changed
+```
 
-mysql> SELECT * FROM ref_users WHERE last_name = 'Safko';
+```sql
+SELECT * FROM ref_users WHERE last_name = 'Safko';
 +--------+------------+-----------+---------+
 | id     | first_name | last_name | user_id |
 +--------+------------+-----------+---------+
@@ -1891,8 +1885,10 @@ CREATE INDEX first_name ON ref_users (first_name);
 ```sql
 Query OK, 0 rows affected (36.93 sec)
 Records: 0  Duplicates: 0  Warnings: 0
+```
 
-mysql> ANALYZE TABLE ref_users;
+```sql
+ANALYZE TABLE ref_users;
 +----------------+---------+----------+----------+
 | Table          | Op      | Msg_type | Msg_text |
 +----------------+---------+----------+----------+
@@ -1945,9 +1941,6 @@ Alternatively, if the key you want to index can be cast to an `int`, you can use
 
 ```sql
 ALTER TABLE
-```
-
-```sql
   zaps
 ADD
   COLUMN used_by_idx_col BIGINT UNSIGNED GENERATED ALWAYS AS (
@@ -1955,10 +1948,18 @@ ADD
       used_by ->> "$.user_id" AS UNSIGNED
     )
   ) INVISIBLE;
+```
+
+```sql
 Query OK, 0 rows affected (0.09 sec)
 Records: 0  Duplicates: 0  Warnings: 0
+```
 
-mysql> CREATE INDEX used_by_idx ON zaps (used_by_idx_col);
+```sql
+CREATE INDEX used_by_idx ON zaps (used_by_idx_col);
+```
+
+```sql
 Query OK, 0 rows affected (0.36 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 ```
@@ -1978,8 +1979,13 @@ last_updated_at: NULL
        owned_by: 42
         used_by: {"user_id": "42"}
 1 row in set (0.00 sec)
+```
 
-mysql> SELECT *, used_by_idx_col  FROM zaps\G
+```sql
+SELECT *, used_by_idx_col  FROM zaps\G
+```
+
+```sql
 *************************** 1. row ***************************
              id: 1
          zap_id: 1
@@ -2023,7 +2029,9 @@ GROUP BY
   last_name
 HAVING
   c > 1\G
+```
 
+```sql
 *************************** 1. row ***************************
 EXPLAIN: -> Filter: (c > 1)  (actual time=17726.018..19132.446 rows=962 loops=1)
     -> Table scan on <temporary>  (actual time=0.005..927.857 rows=999037 loops=1)
@@ -2054,7 +2062,9 @@ GROUP BY
   last_name
 HAVING
   c > 1\G
+```
 
+```sql
 *************************** 1. row ***************************
 EXPLAIN: -> Filter: (c > 1)  (actual time=8.627..9276.021 rows=962 loops=1)
     -> Group aggregate: count(0)  (actual time=0.756..8703.629 rows=999037 loops=1)
@@ -2069,17 +2079,16 @@ Another example, retreiving a specific doubled tuple that I know exists:
 
 ```sql
 SELECT
-```
-
-```sql
   *
 FROM
   ref_users USE INDEX()
 WHERE
   first_name = 'Zoltai'
-  AND
+AND
   last_name = 'Tupler';
+```
 
+```sql
 +--------+------------+-----------+---------+
 | id     | first_name | last_name | user_id |
 +--------+------------+-----------+---------+
@@ -2106,14 +2115,17 @@ WHERE
   first_name = 'Zoltai'
   AND
   last_name = 'Tupler'\G
+```
 
+```sql
 *************************** 1. row ***************************
 EXPLAIN: -> Filter: (ref_users.last_name = 'Tupler')  (cost=11.18 rows=4) (actual time=3.944..4.044 rows=2 loops=1)
     -> Index lookup on ref_users using first_name (first_name='Zoltai')  (cost=11.18 rows=43) (actual time=3.922..4.003 rows=43 loops=1)
 
 1 row in set (0.01 sec)
+```
 
-mysql>
+```sql
 EXPLAIN ANALYZE
 SELECT
   *
@@ -2121,9 +2133,11 @@ FROM
   ref_users IGNORE INDEX(first_name)
 WHERE
   first_name = 'Zoltai'
-  AND
+AND
   last_name = 'Tupler'\G
+```
 
+```sql
 *************************** 1. row ***************************
 EXPLAIN: -> Index lookup on ref_users using full_name (first_name='Zoltai', last_name='Tupler')  (cost=0.70 rows=2) (actual time=0.369..0.394 rows=2 loops=1)
 
@@ -2171,14 +2185,17 @@ This has `O(MN)` time complexity, where `M` and `N` are the number of tuples in 
 
 ```sql
 EXPLAIN ANALYZE
-```
-
-```sql
 SELECT
   full_name
 FROM
   ref_users
-  JOIN zaps ON ref_users.user_id = zaps.owned_by\G
+JOIN
+  zaps
+ON
+  ref_users.user_id = zaps.owned_by\G
+```
+
+```sql
 *************************** 1. row ***************************
 EXPLAIN: -> Nested loop inner join  (cost=498015.60 rows=993197) (actual time=6.998..360927.896 rows=1000000 loops=1)
     -> Table scan on zaps  (cost=100160.95 rows=993197) (actual time=6.685..8804.370 rows=1000000 loops=1)
@@ -2204,15 +2221,18 @@ MySQL [added a hash join in 8.0.18](https://dev.mysql.com/blog-archive/hash-join
 
 ```sql
 EXPLAIN ANALYZE
-```
-
-```sql
 SELECT
   full_name
 FROM
   ref_users
-  IGNORE INDEX (user_id)
-  JOIN zaps ON ref_users.user_id = zaps.owned_by\G
+IGNORE INDEX (user_id)
+JOIN
+  zaps
+ON
+  ref_users.user_id = zaps.owned_by\G
+```
+
+```sql
 *************************** 1. row ***************************
 EXPLAIN: -> Inner hash join (ref_users.user_id = zaps.owned_by)  (cost=98991977261.77 rows=993197) (actual time=7814.295..21403.160 rows=1000000 loops=1)
     -> Table scan on ref_users  (cost=0.03 rows=996699) (actual time=0.402..9319.650 rows=1000000 loops=1)
@@ -2240,9 +2260,6 @@ Database changed
 
 ```sql
 SELECT
-```
-
-```sql
   id,
   CONCAT_WS(', ', last_name, first_name) AS name,
   city,
@@ -2251,7 +2268,9 @@ FROM
   customers
 WHERE
   city = 'Seattle';
+```
 
+``sql
 +----+----------------------+---------+-----------+
 | id | name                 | city    | job_title |
 +----+----------------------+---------+-----------+
@@ -2265,9 +2284,6 @@ You may also have seen or used the wildcard `%` with `LIKE` and `NOT LIKE`.
 
 ```sql
 SELECT
-```
-
-```sql
   id,
   CONCAT_WS(', ', last_name, first_name) AS name,
   city,
@@ -2276,7 +2292,9 @@ FROM
   customers
 WHERE
   city LIKE 'Sea%';
+```
 
+```sql
 +----+----------------------+---------+-----------+
 | id | name                 | city    | job_title |
 +----+----------------------+---------+-----------+
@@ -2290,9 +2308,6 @@ These two are functionally equivalent queries. However, if there is an index on 
 
 ```sql
 EXPLAIN SELECT
-```
-
-```sql
   id,
   city,
   CONCAT_WS(', ', last_name, first_name) AS name,
@@ -2301,7 +2316,9 @@ FROM
   customers USE INDEX(city)
 WHERE
   city LIKE 'Sea%'\G
+```
 
+```sql
 *************************** 1. row ***************************
            id: 1
   select_type: SIMPLE
@@ -2316,9 +2333,10 @@ possible_keys: city
      filtered: 100.00
         Extra: Using index condition
 1 row in set, 1 warning (0.00 sec)
+```
 
+```sql
 -- NOTE: with the leading wildcard, the index is disabled, even if FORCED
-mysql>
 EXPLAIN SELECT
   id,
   city,
@@ -2328,7 +2346,9 @@ FROM
   customers FORCE INDEX(city)
 WHERE
   city LIKE '%Sea%'\G
+```
 
+```sql
 *************************** 1. row ***************************
            id: 1
   select_type: SIMPLE
@@ -2343,9 +2363,10 @@ possible_keys: NULL
      filtered: 11.11
         Extra: Using where
 1 row in set, 1 warning (0.00 sec)
+```
 
+```sql
 -- NOTE: the new syntax requires the table and column to be specified
-mysql>
 EXPLAIN
 SELECT
   id,
@@ -2357,7 +2378,9 @@ FROM
     /*+ INDEX(customers city) */
 WHERE
   city LIKE 'Sea%'\G
+```
 
+```sql
 *************************** 1. row ***************************
            id: 1
   select_type: SIMPLE
@@ -2380,9 +2403,6 @@ Earlier, we used `HAVING` in a `GROUP BY` aggregation. The difference between th
 
 ```sql
 SELECT
-```
-
-```sql
   c.first_name,
   c.last_name,
   c.city,
@@ -2408,9 +2428,6 @@ The desired output here is to produce the name and city of any customer who has 
 
 ```sql
 SELECT
-```
-
-```sql
   c.first_name,
   c.last_name,
   c.city,
@@ -2429,7 +2446,9 @@ WHERE
   c.job_title LIKE 'Purchasing%'
 HAVING
   order_status = 'New';
+```
 
+```sql
 +------------+---------------+-------------+--------------+
 | first_name | last_name     | city        | order_status |
 +------------+---------------+-------------+--------------+
@@ -2453,9 +2472,6 @@ This is somewhat of a contrived example, since it's not necessary to return the 
 
 ```sql
 SELECT
-```
-
-```sql
   c.first_name,
   c.last_name,
   c.city,
@@ -2468,7 +2484,9 @@ WHERE
   c.job_title LIKE 'Purchasing%'
   AND
   os.status_name = 'New';
+```
 
+```sql
 +------------+---------------+-------------+--------------+
 | first_name | last_name     | city        | order_status |
 +------------+---------------+-------------+--------------+
@@ -2504,9 +2522,11 @@ EXPLAIN: -> Filter: (order_status = 'New')  (actual time=0.701..4.597 rows=12 lo
     -> Single-row index lookup on os using PRIMARY (id=o.status_id)  (cost=0.35 rows=1) (actual time=0.022..0.022 rows=1 loops=54)
 
 1 row in set, 1 warning (0.00 sec)
+```
 
+```sql
 -- This is less of a warning, and more of a note stating that the query optimizer decided to resolve order.status_id in the first SELECT, rather than the subquery where it's referenced.
-mysql> SHOW WARNINGS\G
+SHOW WARNINGS\G
 *************************** 1. row ***************************
   Level: Note
    Code: 1276
@@ -2541,8 +2561,6 @@ First, I'll spoil a lot of this - it's likely that you won't have to do much of 
 If you're just exploring a schema, there's nothing wrong with `SELECT * FROM <table> LIMIT 10` or some other small number (< ~1000). It will be nearly instantaneous. However, the problem arises when you're also using `ORDER BY`. Recall that we had a composite index on `(first_name, last_name)` called `full_name`. Compare these two:
 
 ```sql
-
-mysql>
 EXPLAIN ANALYZE
 SELECT
   *
@@ -2551,13 +2569,17 @@ FROM
 ORDER BY
   first_name,
   last_name\G
+```
+
+```sql
 *************************** 1. row ***************************
 EXPLAIN: -> Sort: ref_users.first_name, ref_users.last_name  (cost=100495.40 rows=996699) (actual time=12199.513..12603.379 rows=1000000 loops=1)
     -> Table scan on ref_users  (cost=100495.40 rows=996699) (actual time=1.755..7039.004 rows=1000000 loops=1)
 
 1 row in set (13.68 sec)
+```
 
-mysql>
+```sql
 EXPLAIN ANALYZE
 SELECT
   id,
@@ -2568,6 +2590,9 @@ FROM
 ORDER BY
   first_name,
   last_name\G
+```
+
+```sql
 *************************** 1. row ***************************
 EXPLAIN: -> Index scan on ref_users using full_name  (cost=100495.40 rows=996699) (actual time=0.433..5413.188 rows=1000000 loops=1)
 
@@ -2578,9 +2603,6 @@ Since the the table includes columns not covered by the index (`user_id`), it wo
 
 ```sql
 EXPLAIN ANALYZE
-```
-
-```sql
 SELECT
   *
 FROM
@@ -2589,6 +2611,9 @@ FORCE INDEX(full_name)
 ORDER BY
   first_name,
   last_name\G
+```
+
+```sql
 *************************** 1. row ***************************
 EXPLAIN: -> Index scan on ref_users using full_name  (cost=348844.90 rows=996699) (actual time=11.273..65858.816 rows=1000000 loops=1)
 
@@ -2604,9 +2629,14 @@ If you need to get `n` rows from the middle of a table, unless you have a really
 ```sql
 USE test;
 Database changed
+```
 
+```sql
 -- The alternate form (and, IMO, the clearer one) is LIMIT 10 OFFSET 500000
-mysql> SELECT * FROM ref_users LIMIT 500000,10;
+SELECT * FROM ref_users LIMIT 500000,10;
+```
+
+```sql
 +--------+------------+-----------+---------+
 | id     | first_name | last_name | user_id |
 +--------+------------+-----------+---------+
@@ -2624,7 +2654,7 @@ mysql> SELECT * FROM ref_users LIMIT 500000,10;
 10 rows in set (3.10 sec)
 ```
 
-Doing this causes a table scan up to the specified offset. Far better, if you have a known monotonic number (like `id`), is to use a `WHERE` predicate (`WHERE` will be covered later in more detail):
+Doing this causes a table scan up to the specified offset. Far better, if you have a known monotonic number (like `id`), is to use a `WHERE` predicate:
 
 ```sql
 SELECT * FROM ref_users WHERE id > 500000 LIMIT 10;
@@ -2658,26 +2688,30 @@ This also tends to be something that works well early on with little load, but a
 
 ```sql
 EXPLAIN ANALYZE
-```
-
-```sql
 SELECT
   first_name,
   last_name
 FROM
   ref_users\G
+```
+
+```sql
 *************************** 1. row ***************************
 EXPLAIN: -> Index scan on ref_users using full_name  (cost=101977.37 rows=996699) (actual time=1.163..6200.004 rows=1000000 loops=1)
 
 1 row in set (7.09 sec)
+```
 
-mysql>
+```sql
 EXPLAIN ANALYZE
 SELECT DISTINCT
   first_name,
   last_name
 FROM
   ref_users\G
+```
+
+```sql
 *************************** 1. row ***************************
 EXPLAIN: -> Group (no aggregates)  (actual time=0.429..9110.455 rows=999037 loops=1)
     -> Index scan on ref_users using full_name  (cost=101977.37 rows=996699) (actual time=0.403..6004.725 rows=1000000 loops=1)
@@ -2689,15 +2723,15 @@ Bear in mind that the above was using an index scan! If there isn't a covering i
 
 ```sql
 EXPLAIN ANALYZE
-```
-
-```sql
 SELECT DISTINCT
   first_name,
   last_name
 FROM
   ref_users
 USE INDEX()\G
+```
+
+```sql
 *************************** 1. row ***************************
 EXPLAIN: -> Table scan on <temporary>  (actual time=0.015..694.662 rows=999037 loops=1)
     -> Temporary table with deduplication  (cost=100495.40 rows=996699) (actual time=13580.563..14471.841 rows=999037 loops=1)
