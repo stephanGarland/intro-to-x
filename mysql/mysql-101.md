@@ -1,63 +1,73 @@
-- [Introduction](#introduction)
-  - [What is SQL?](#what-is-sql)
-  - [What is a relational database?](#what-is-a-relational-database)
-  - [What is ACID?](#what-is-acid)
-    - [What is MySQL?](#what-is-mysql)
-      - [How is it pronounced?](#how-is-it-pronounced)
-  - [Basic definitions](#basic-definitions)
-    - [SQL sub-languages](#sql-sub-languages)
-    - [Other definitions](#other-definitions)
-- [MySQL Components](#mysql-components)
-- [MySQL Operations](#mysql-operations)
-  - [Assumptions](#assumptions)
-  - [Notes](#notes)
-  - [Schemata](#schemata)
-  - [Schema spelunking](#schema-spelunking)
-    - [String literals](#string-literals)
-      - [SQL\_MODE](#sql_mode)
-    - [Create a schema](#create-a-schema)
-  - [Table operations](#table-operations)
-    - [Create tables](#create-tables)
-      - [Data types](#data-types)
-    - [Foreign keys](#foreign-keys)
-      - [Why you might want foreign keys](#why-you-might-want-foreign-keys)
-      - [Creating a foreign key](#creating-a-foreign-key)
-      - [Demonstrating a foreign key](#demonstrating-a-foreign-key)
-  - [Column operations](#column-operations)
-    - [Adding columns](#adding-columns)
-    - [Modfying columns](#modfying-columns)
-    - [Dropping columns](#dropping-columns)
-    - [Generated columns](#generated-columns)
-    - [Invisible columns](#invisible-columns)
-  - [Queries](#queries)
-    - [SELECT](#select)
-    - [TABLE](#table)
-    - [WITH (Common Table Expressions)](#with-common-table-expressions)
-  - [Stored Procedures](#stored-procedures)
-  - [Joins](#joins)
-    - [Relational alegbra](#relational-alegbra)
-    - [Types of joins](#types-of-joins)
-      - [Cross](#cross)
-      - [Inner Join](#inner-join)
-      - [Left Outer Join](#left-outer-join)
-      - [Right Outer Join](#right-outer-join)
-      - [Full Outer Join](#full-outer-join)
-    - [Specifying a column's table](#specifying-a-columns-table)
-    - [Indices](#indices)
-      - [Single indices](#single-indices)
-      - [JSON / Longtext](#json--longtext)
-      - [Composite indices](#composite-indices)
-      - [Testing indices](#testing-indices)
-      - [Descending indices](#descending-indices)
-      - [When indicies aren't helpful](#when-indicies-arent-helpful)
-    - [Predicates](#predicates)
-      - [WHERE](#where)
-      - [HAVING](#having)
-  - [Query optimization](#query-optimization)
-    - [SELECT \*](#select-)
-    - [OFFSET / LIMIT](#offset--limit)
-    - [DISTINCT](#distinct)
-  - [Cleanup](#cleanup)
+<!-- vim-markdown-toc GFM -->
+
+* [Prerequisites](#prerequisites)
+* [Introduction](#introduction)
+  * [What is SQL?](#what-is-sql)
+  * [What is a relational database?](#what-is-a-relational-database)
+  * [What is ACID?](#what-is-acid)
+    * [What is MySQL?](#what-is-mysql)
+      * [How is it pronounced?](#how-is-it-pronounced)
+  * [Basic definitions](#basic-definitions)
+    * [SQL sub-languages](#sql-sub-languages)
+    * [Other definitions](#other-definitions)
+* [MySQL Components](#mysql-components)
+* [MySQL Operations](#mysql-operations)
+  * [Assumptions](#assumptions)
+  * [Notes](#notes)
+  * [Schemata](#schemata)
+  * [Schema spelunking](#schema-spelunking)
+    * [String literals](#string-literals)
+      * [SQL_MODE](#sql_mode)
+    * [Create a schema](#create-a-schema)
+  * [Table operations](#table-operations)
+    * [Create tables](#create-tables)
+      * [Data types](#data-types)
+    * [Foreign keys](#foreign-keys)
+      * [Why you might want foreign keys](#why-you-might-want-foreign-keys)
+      * [Creating a foreign key](#creating-a-foreign-key)
+      * [Demonstrating a foreign key](#demonstrating-a-foreign-key)
+  * [Column operations](#column-operations)
+    * [Adding columns](#adding-columns)
+    * [Modfying columns](#modfying-columns)
+    * [Dropping columns](#dropping-columns)
+    * [Copied table definitions](#copied-table-definitions)
+      * [Copied table data and truncating](#copied-table-data-and-truncating)
+    * [Transactions](#transactions)
+    * [Generated columns](#generated-columns)
+    * [Invisible columns](#invisible-columns)
+  * [Queries](#queries)
+    * [SELECT](#select)
+    * [INSERT](#insert)
+    * [TABLE](#table)
+  * [Joins](#joins)
+    * [Relational alegbra](#relational-alegbra)
+    * [Types of joins](#types-of-joins)
+      * [Cross](#cross)
+      * [Inner Join](#inner-join)
+      * [Left Outer Join](#left-outer-join)
+      * [Right Outer Join](#right-outer-join)
+      * [Full Outer Join](#full-outer-join)
+    * [Specifying a column's table](#specifying-a-columns-table)
+    * [Indices](#indices)
+      * [Single indices](#single-indices)
+      * [JSON / Longtext](#json--longtext)
+      * [Composite indices](#composite-indices)
+      * [Testing indices](#testing-indices)
+      * [Descending indices](#descending-indices)
+      * [When indicies aren't helpful](#when-indicies-arent-helpful)
+    * [Predicates](#predicates)
+      * [WHERE](#where)
+      * [HAVING](#having)
+  * [Query optimization](#query-optimization)
+    * [SELECT *](#select-)
+    * [OFFSET / LIMIT](#offset--limit)
+    * [DISTINCT](#distinct)
+  * [Cleanup](#cleanup)
+
+<!-- vim-markdown-toc -->
+# Prerequisites
+
+You'll need to have a MySQL client. In no particular order, options are [DBeaver](https://dbeaver.io/) (GUI), [MySQL Workbench](https://www.mysql.com/products/workbench/) (GUI), [mysql-client](https://dev.mysql.com/doc/refman/8.0/en/mysql.html) (TUI), and others. Note that the server is currently using a self-signed TLS certificate, which some clients may complain about. MySQL Workbench and msyql-client are proven to work without issue. Also note that mysql-client is available via [Homebrew](https://formulae.brew.sh/formula/mysql-client), but it won't symlink by default, so you'll need to do something like `brew link --force mysql-client`.
 
 # Introduction
 
@@ -70,7 +80,10 @@ Structured Query Language. It's a domain-specific language designed to manage da
 It's what most people probably think of when they think of a database. Broadly speaking, data is related to other data in some manner. For example, observe these two tables (tl;dr a logical grouping of data):
 
 ```sql
-mysql> SHOW COLUMNS FROM users;
+SHOW COLUMNS FROM users;
+```
+
+```sql
 +------------+----------+------+-----+---------+----------------+
 | Field      | Type     | Null | Key | Default | Extra          |
 +------------+----------+------+-----+---------+----------------+
@@ -83,17 +96,21 @@ mysql> SHOW COLUMNS FROM users;
 ```
 
 ```sql
-+-----------------+-----------------+------+-----+--------------+-------------------+
-| Field           | Type            | Null | Key | Default      | Extra             |
-+-----------------+-----------------+------+-----+--------------+-------------------+
-| id              | bigint unsigned | NO   | PRI | NULL         | auto_increment    |
-| zap_id          | bigint unsigned | NO   | UNI | NULL         |                   |
-| created_at      | timestamp       | NO   |     | NULL         |                   |
-| last_updated_at | timestamp       | YES  |     | NULL         |                   |
-| owned_by        | bigint unsigned | NO   |     | NULL         |                   |
-| shared_with     | json            | YES  |     | json_array() | DEFAULT_GENERATED |
-+-----------------+-----------------+------+-----+--------------+-------------------+
-6 rows in set (0.04 sec)
+SHOW COLUMNS FROM zaps;
+```
+
+```sql
++-----------------+-----------------+------+-----+-------------------+-----------------------------+
+| Field           | Type            | Null | Key | Default           | Extra                       |
++-----------------+-----------------+------+-----+-------------------+-----------------------------+
+| id              | bigint unsigned | NO   | PRI | NULL              | auto_increment              |
+| zap_id          | bigint unsigned | NO   | UNI | NULL              |                             |
+| created_at      | timestamp       | NO   |     | CURRENT_TIMESTAMP | DEFAULT_GENERATED           |
+| last_updated_at | timestamp       | YES  |     | NULL              | on update CURRENT_TIMESTAMP |
+| owned_by        | bigint unsigned | NO   | MUL | NULL              |                             |
+| shared_with     | json            | YES  |     | json_array()      | DEFAULT_GENERATED           |
++-----------------+-----------------+------+-----+-------------------+-----------------------------+
+6 rows in set (0.01 sec)
 ```
 
 Table `users` has four columns - `id`, `first_name`, `last_name`, and `user_id`. Table `zaps` has six columns - `id`, `zap_id`, `created_at`, `last_updated_at`, `owned_by`, and `shared_with`.
@@ -185,8 +202,7 @@ As of MySQL 8.0, this is the official architecture drawing:
 ## Assumptions
 
 * All examples here are using MySQL 8.0.23, with the InnoDB engine.
-* You're using the `mysql` client, available via Homebrew: `brew install mysql-client`.
-* You're connecting to the TODO database, using the credentials in 1Pass.
+* All examples here are using the mysql-client TUI program, but others may work as well.
 
 ## Notes
 
@@ -209,7 +225,11 @@ A brand-new installation of MySQL will typically have four schemata - `informati
 
 As mentioned, `databases` is often used to mean `schema`, and in fact in MySQL they're synonyms for this statement - `SHOW schemas` results in the exact same output. You won't have the `test` database yet, but you should see the other four shown below. NOTE: I'll demonstrate both output formats here, and will switch as needed to easily display the information.
 
-mysql> SHOW schemas;
+```sql
+SHOW schemas;
+```
+
+```sql
 +--------------------+
 | Database           |
 +--------------------+
@@ -221,9 +241,13 @@ mysql> SHOW schemas;
 | test               |
 +--------------------+
 6 rows in set (0.01 sec)
+```
 
 ```sql
-mysql> SHOW schemas\G
+SHOW schemas\G
+```
+
+```sql
 *************************** 1. row ***************************
 Database: information_schema
 *************************** 2. row ***************************
@@ -239,10 +263,9 @@ Database: test
 6 rows in set (0.01 sec)
 ```
 
-The `SHOW` statement behind the scenes is gathering and formatting data in a way that's easy for humans to see and understand. Often, it comes from the `information_schema` or `performance_schema` schema, as seen below. This query also demonstrates the use of the `AS` statement, which allows you to alias a column or sub-query. NOTE: Due to how queries are ran, you can't use the alias for certain clauses, such as `WHERE`, but you can use `HAVING` - more on that later.
+The `SHOW` statement behind the scenes is gathering and formatting data in a way that's easy for humans to see and understand. Often, it comes from the `information_schema` or `performance_schema` schema, as seen below. This query also demonstrates the use of the `AS` statement, which allows you to alias a column or sub-query.
 
 ```sql
-mysql >
 SELECT
   schema_name AS 'Database'
 FROM
@@ -260,52 +283,6 @@ FROM
 6 rows in set (0.01 sec)
 ```
 
-```sql
-mysql >
-SELECT
-  schema_name AS `Database`
-FROM
-  information_schema.schemata
-WHERE
-  `Database` LIKE 'test';
-ERROR 1054 (42S22): Unknown column 'Database' in 'where clause'
-```
-
-```sql
-mysql >
-SELECT
-  schema_name AS `Database`
-FROM
-  information_schema.schemata
-WHERE
-  schema_name = 'test';
-
-+----------+
-| Database |
-+----------+
-| test     |
-+----------+
-1 row in set (0.00 sec)
-
-```
-
-```sql
-mysql>
-SELECT
-  schema_name AS `Database`
-FROM
-  information_schema.schemata
-HAVING
-  `Database` = 'test';
-
-+----------+
-| Database |
-+----------+
-| test     |
-+----------+
-1 row in set (0.01 sec)
-```
-
 ### String literals
 
 You may have noticed that in the above examples, sometimes a column or table name was enclosed with a single quote (`'`), sometimes a backtick ( \` ), and other times nothing at all. This is deliberate.
@@ -315,14 +292,20 @@ In ANSI SQL, string literals are represented with single quotation marks, e.g. '
 Backticks may be used at any time, and are called quoted identifiers. They tell the SQL parser to consider anything enclosed in them as a string literal. This may be useful if, for example, you created a table named `table` (please don't), had a column named `count`, etc. The full list of keywords / reserved words [is here](https://dev.mysql.com/doc/refman/8.0/en/keywords.html) if you want to see what to avoid.
 
 ```sql
-mysql> CREATE TABLE table (id INT);
+CREATE TABLE table (id INT);
+```
+
+```sql
 ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'table (id INT)' at line 1
 ```
 
 vs.
 
 ```sql
-mysql> CREATE TABLE `table` (id INT);
+CREATE TABLE `table` (id INT);
+```
+
+```sql
 Query OK, 0 rows affected (0.15 sec)
 ```
 
@@ -331,7 +314,10 @@ Query OK, 0 rows affected (0.15 sec)
 As it turns out, you can alter this behavior. First, let's check the current `SQL_MODE`. System variables can be viewed with either `SHOW VARIABLES` or `SELECT @@<[GLOBAL, SESSION]>`.
 
 ```sql
-mysql> SHOW VARIABLES LIKE 'sql_mode'\G
+SHOW VARIABLES LIKE 'sql_mode'\G
+```
+
+```sql
 *************************** 1. row ***************************
 Variable_name: sql_mode
         Value: ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
@@ -341,7 +327,10 @@ Variable_name: sql_mode
 If neither `GLOBAL` or `SESSION` are specified when using the `@@` method, the session value is returned if it exists, otherwise the global value is returned.
 
 ```sql
-mysql> SELECT @@sql_mode\G
+SELECT @@sql_mode\G
+```
+
+```sql
 *************************** 1. row ***************************
 @@sql_mode: ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
 1 row in set (0.00 sec)
@@ -350,23 +339,32 @@ mysql> SELECT @@sql_mode\G
 We'll use the `mysql.user` table for this example. First, no quotes of any kind. As expected, we get the rows from those two columns.
 
 ```sql
+SELECT host, user FROM mysql.user;
+```
+
+```sql
 mysql> SELECT host, user FROM mysql.user;
-+-----------+------------------+
-| host      | user             |
-+-----------+------------------+
-| %         | sgarland         |
-| localhost | mysql.infoschema |
-| localhost | mysql.session    |
-| localhost | mysql.sys        |
-| localhost | root             |
-+-----------+------------------+
-5 rows in set (0.00 sec)
++-------------+------------------+
+| host        | user             |
++-------------+------------------+
+| %           | zapier           |
+| %           | zapier_training  |
+| 192.168.1.% | sgarland         |
+| localhost   | mysql.infoschema |
+| localhost   | mysql.session    |
+| localhost   | mysql.sys        |
+| localhost   | root             |
++-------------+------------------+
+7 rows in set (0.01 sec)
 ```
 
 Now, we'll mix single and double quotes.
 
 ```sql
-mysql> SELECT 'host', "user" FROM mysql.user;
+SELECT 'host', "user" FROM mysql.user;
+```
+
+```sql
 +------+------+
 | host | user |
 +------+------+
@@ -375,8 +373,10 @@ mysql> SELECT 'host', "user" FROM mysql.user;
 | host | user |
 | host | user |
 | host | user |
+| host | user |
+| host | user |
 +------+------+
-5 rows in set (0.00 sec)
+7 rows in set (0.00 sec)
 ```
 
 In MySQL's default mode, these two are treated the same, and you get the respective string literals printed as rows for the selected columns.
@@ -384,23 +384,31 @@ In MySQL's default mode, these two are treated the same, and you get the respect
 If single (or double) quotes are combined with backticks, you get partial results.
 
 ```sql
-mysql> SELECT 'host', `user` FROM mysql.user;
+SELECT 'host', `user` FROM mysql.user;
+```
+
+```sql
 +------+------------------+
 | host | user             |
 +------+------------------+
+| host | zapier           |
+| host | zapier_training  |
 | host | sgarland         |
 | host | mysql.infoschema |
 | host | mysql.session    |
 | host | mysql.sys        |
 | host | root             |
 +------+------------------+
-5 rows in set (0.00 sec)
+7 rows in set (0.00 sec)
 ```
 
 Now, we'll modify the session's `sql_mode`. You don't have permission to set any global variables, but you can set most session variables. Unlike for the selection, if you don't specify `GLOBAL` or `SESSION`, the `SET` will always assume `SESSION`.
 
 ```sql
-mysql> SET @@sql_mode = ANSI_QUOTES;
+SET @@sql_mode = ANSI_QUOTES;
+```
+
+```sql
 Query OK, 0 rows affected (0.00 sec)
 
 mysql> SELECT @@sql_mode\G
@@ -412,7 +420,10 @@ mysql> SELECT @@sql_mode\G
 Oh no, we've overridden all of the other settings! Luckily, the global variable hasn't been modified, so we can use it to build the correct setting. To do so, we'll use the `CONCAT_WS` function, which as the name implies, concatenates things with a separator. It takes the form `CONCAT_WS(sep, <expressions>)`. We'll also run a `SELECT` of the global variable, nesting it as a sub-query.
 
 ```sql
-mysql> SET @@sql_mode = (SELECT CONCAT_WS(',', 'ANSI_QUOTES', (SELECT @@GLOBAL.sql_mode)));
+SET @@sql_mode = (SELECT CONCAT_WS(',', 'ANSI_QUOTES', (SELECT @@GLOBAL.sql_mode)));
+```
+
+```sql
 Query OK, 0 rows affected (0.01 sec)
 
 mysql> SELECT @@sql_mode\G
@@ -424,17 +435,22 @@ mysql> SELECT @@sql_mode\G
 Whew. Now we can try out the quoting differences again.
 
 ```sql
-mysql> SELECT 'host', "user" FROM mysql.user;
+SELECT 'host', "user" FROM mysql.user;
+```
+
+```sql
 +------+------------------+
-| host | user             |
+| host | USER             |
 +------+------------------+
+| host | zapier           |
+| host | zapier_training  |
 | host | sgarland         |
 | host | mysql.infoschema |
 | host | mysql.session    |
 | host | mysql.sys        |
 | host | root             |
 +------+------------------+
-5 rows in set (0.01 sec)
+7 rows in set (0.00 sec)
 ```
 
 This time, only single quotes are treated as string literals, with double quotes being treated as identifiers.
@@ -442,7 +458,10 @@ This time, only single quotes are treated as string literals, with double quotes
 Now, set the `SESSION.sql_mode` back to its original value, using a sub-query like before.
 
 ```sql
-mysql> SET @@sql_mode = (SELECT @@GLOBAL.sql_mode);
+SET @@sql_mode = (SELECT @@GLOBAL.sql_mode);
+```
+
+```sql
 Query OK, 0 rows affected (0.00 sec)
 ```
 
@@ -451,7 +470,10 @@ Query OK, 0 rows affected (0.00 sec)
 Let's create some tables! First, we need a schema. There aren't a lot of options here to be covered, so we can just create one. I'll be using `foo`, but you should substitute any name you'd like that's not already in use. Ideally, we would also enable encryption at rest. This can be globally set, or specified at schema creation - any tables in the schema inherit its setting. If you're curious, InnoDB uses AES, with ECB mode for tablespaces, and CBC mode for data. Also notably, [undo logs](https://dev.mysql.com/doc/refman/8.0/en/innodb-undo-logs.html) and [redo logs](https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html) have their encryption handled by separate variables. However, since this requires some additional work (all of the easy options are only available with MySQL Enterprise; MySQL Community requires you to generate and store the key yourself), we'll skip it.
 
 ```sql
-mysql> CREATE SCHEMA foo;
+CREATE SCHEMA foo;
+```
+
+```sql
 Query OK, 1 row affected (0.02 sec)
 ```
 
@@ -462,14 +484,16 @@ Query OK, 1 row affected (0.02 sec)
 First, we'll select our new schema so we don't have to constantly specify it. I'll be using `test` here, but you should substitute whatever you created in the last step.
 
 ```sql
-mysql> USE test;
+USE foo;
+```
+
+```sql
 Database changed
 ```
 
 Now, we'll create the `users` table.
 
 ```sql
-mysql>
 CREATE TABLE users (
   id BIGINT PRIMARY KEY,
   first_name CHAR(64),
@@ -477,8 +501,13 @@ CREATE TABLE users (
   uid BIGINT
 );
 Query OK, 0 rows affected (0.17 sec)
+```
 
-mysql> SHOW COLUMNS FROM users;
+```sql
+SHOW COLUMNS FROM users;
+```
+
+```sql
 +------------+----------+------+-----+---------+-------+
 | Field      | Type     | Null | Key | Default | Extra |
 +------------+----------+------+-----+---------+-------+
@@ -490,10 +519,15 @@ mysql> SHOW COLUMNS FROM users;
 4 rows in set (0.02 sec)
 ```
 
-Hmm, something's not quite right as compared to the original example - we're missing `AUTO_INCREMENT`! Without it, you'd have to manually specify the `id` value (which is this table's `PRIMARY KEY`), which is annoying. Additionally, while `id` was automatically made to be `NOT NULL` since it's the primary key, `uid` was not, so we need to change those. Finally, `uid` should actually be named `user_id`, and it should have a `UNIQUE` constraint. Note that when redefining a column, it's like a `POST`, not a `PUT` - if you only specify what you want to be changed, the pre-existing definitions will be deleted.
+Hmm, something's not quite right as compared to the original example - we're missing `AUTO_INCREMENT`! Without it, you'd have to manually specify the `id` value (which is this table's `PRIMARY KEY`), which is annoying. Additionally, while `id` was automatically made to be `NOT NULL` since it's the primary key, `uid` was not, so we need to change those (if you don't specify `NOT NULL`, MySQL defaults to `NULL`). Finally, `uid` should actually be named `user_id`, and it should have a `UNIQUE` constraint.
+
+NOTE: when redefining a column, it's like a `POST`, not a `PUT` - if you only specify what you want to be changed, the pre-existing definitions will be deleted.
 
 ```sql
-mysql> ALTER TABLE users MODIFY uid BIGINT NOT NULL UNIQUE;
+ALTER TABLE users MODIFY uid BIGINT NOT NULL UNIQUE;
+```
+
+```sql
 Query OK, 0 rows affected (0.27 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 
@@ -516,7 +550,10 @@ mysql> SHOW COLUMNS FROM users;
 If you wanted to rename a column without specifying its definition, you can use `RENAME COLUMN`.
 
 ```sql
-mysql> ALTER TABLE users RENAME COLUMN uid TO user_id;
+ALTER TABLE users RENAME COLUMN uid TO user_id;
+```
+
+```sql
 Query OK, 0 rows affected (0.12 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 ```
@@ -526,20 +563,21 @@ Now, we'll make the `zaps` table. You have noticed by now that the primary key c
 In general, column ordering in a table doesn't tremendously matter for MySQL (but it does for queries, as we'll see later), so stick to convention.
 
 ```sql
-mysql>
 CREATE TABLE zaps (
   `id` BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
   `zap_id` BIGINT UNSIGNED NOT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT NOW(),
   `last_updated_at` TIMESTAMP NULL ON UPDATE NOW(),
   `owned_by` BIGINT UNSIGNED NOT NULL,
-  `shared_with` JSON DEFAULT (
-    JSON_ARRAY()
-  ),
   UNIQUE(zap_id)
 );
+```
 
-mysql> SHOW COLUMNS FROM zaps;
+```sql
+SHOW COLUMNS FROM zaps;
+```
+
+```sql
 +-----------------+-----------------+------+-----+-------------------+-----------------------------+
 | Field           | Type            | Null | Key | Default           | Extra                       |
 +-----------------+-----------------+------+-----+-------------------+-----------------------------+
@@ -548,15 +586,11 @@ mysql> SHOW COLUMNS FROM zaps;
 | created_at      | timestamp       | NO   |     | CURRENT_TIMESTAMP | DEFAULT_GENERATED           |
 | last_updated_at | timestamp       | YES  |     | NULL              | on update CURRENT_TIMESTAMP |
 | owned_by        | bigint unsigned | NO   |     | NULL              |                             |
-| shared_with     | json            | YES  |     | json_array()      | DEFAULT_GENERATED           |
 +-----------------+-----------------+------+-----+-------------------+-----------------------------+
-6 rows in set (0.02 sec)
+5 rows in set (0.00 sec)
 ```
 
-We're introducing some new things here. In no particular order:
-* A JSON column
-  * [MySQL supports JSON](https://dev.mysql.com/doc/refman/8.0/en/json.html) as a data type! While you can of course simply store JSON strings in a text column, there are some benefits to using the native JSON datatype; among them that you can index scalars from the JSON objects, and that you can extract specific keys/values from the objects instead of the entire string.
-  * Please don't use this as an excuse to treat MySQL as a Document DB, though. If you want NoSQL, you should use NoSQL. RDBMS are optimized for relations. Storing some information in JSON is fine, but it shouldn't be the default.
+We're introducing some new defaults here:
 * DEFAULT NOW()
   * With this, much like an `AUTO INCREMENTING` column, the current timestamp will be added to the `created_at` column when a new row is created. NOTE: This doesn't make the column immutable, and nothing stops someone from altering this value manually later.
 * ON UPDATE NOW()
@@ -571,8 +605,10 @@ What is the difference between a `VARCHAR` and a `CHAR`, and what is the integer
 Let's try adding a 65-byte string to a column with a strict 64-byte limit - this can be done with the `LPAD` function, which takes the form `LPAD(<string>, <padding>, <padding_character>).`
 
 ```sql
-mysql>
 INSERT INTO users (first_name, last_name, user_id)
+```
+
+```sql
 VALUES
   (
     "Stephan",
@@ -588,13 +624,14 @@ ERROR 1406 (22001): Data too long for column 'last_name' at row 1
 Since people in different cultures may have longer names than I'm used to, making this column allowed to be wider than 64 bytes is probably a good idea, especially if there isn't a storage penalty for doing so. While a `VARCHAR` can technically be up to `2^16 - 1` bytes - the same as the row width limit - it's still a good idea to have some kind of reasonable limits in place, lest someone exploit a security hole and starting using your DB for Chia mining or something. 255 bytes was the historic maximum length allowed in older SQL implementations, and it's the maximum value that a `VARCHAR` can be stored with while having a 1-byte length prefix. Thus, we'll modify our columns to this standard.
 
 ```sql
-mysql>
 ALTER TABLE users
   MODIFY first_name VARCHAR(255),
   MODIFY last_name VARCHAR(255);
 Query OK, 0 rows affected (0.13 sec)
 Records: 0  Duplicates: 0  Warnings: 0
+```
 
+```sql
 mysql> SHOW COLUMNS FROM users;
 +------------+--------------+------+-----+---------+----------------+
 | Field      | Type         | Null | Key | Default | Extra          |
@@ -616,9 +653,12 @@ For exact precision numbers, MySQL supports `DECIMAL` and `NUMERIC`, and they ar
 There are also sub-types of `INT`, such as `SMALLINT` (2 bytes, storing a maximum value of `2^16 - 1` if unsigned), and `BIGINT`, as seen previously - it's 8 bytes, and stores a maximum value of `2^63 - 1` if signed, and `2^64 - 1` if unsigned. Since there's not much reason to have negative IDs, let's alter those definitions as well:
 
 ```sql
-msyql> ALTER TABLE users
+ALTER TABLE users
   MODIFY id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   MODIFY user_id BIGINT UNSIGNED NOT NULL UNIQUE;
+```
+
+```sql
 Query OK, 0 rows affected, 1 warning (0.10 sec)
 Records: 0  Duplicates: 0  Warnings: 1
 ```
@@ -626,7 +666,10 @@ Records: 0  Duplicates: 0  Warnings: 1
 A warning? Huh?
 
 ```sql
-mysql> SHOW WARNINGS\G
+SHOW WARNINGS\G
+```
+
+```sql
 *************************** 1. row ***************************
   Level: Warning
    Code: 1831
@@ -637,11 +680,19 @@ Message: Duplicate index 'user_id' defined on the table 'test.users'. This is de
 Ah - constraints like `UNIQUE` don't have to be redefined along with the rest of the column definition, and in doing so, we've duplicated a constraint. While allowed for now, it's not a good practice, so we'll get rid of it.
 
 ```sql
-mysql> ALTER TABLE users DROP CONSTRAINT uid;
+ALTER TABLE users DROP CONSTRAINT uid;
+```
+
+```sql
 Query OK, 0 rows affected (0.16 sec)
 Records: 0  Duplicates: 0  Warnings: 0
+```
 
-mysql> SHOW COLUMNS FROM users;
+```sql
+SHOW COLUMNS FROM users;
+```
+
+```sql
 +------------+-----------------+------+-----+---------+----------------+
 | Field      | Type            | Null | Key | Default | Extra          |
 +------------+-----------------+------+-----+---------+----------------+
@@ -662,48 +713,66 @@ These tables seem fine to start with, but the columns that we are implicitly des
 Let's create a user, and give them a Zap.
 
 ```sql
-mysql>
 INSERT INTO users (
   first_name, last_name, user_id
 )
 VALUES
   ('Stephan', 'Garland', 1);
-Query OK, 1 row affected (0.02 sec)
-
-mysql> INSERT INTO zaps (zap_id, owned_by) VALUES (1, 1);
-Query OK, 1 row affected (0.03 sec)
-
-mysql> TABLE zaps;
-+----+--------+---------------------+-----------------+----------+-------------+
-| id | zap_id | created_at          | last_updated_at | owned_by | shared_with |
-+----+--------+---------------------+-----------------+----------+-------------+
-|  1 |      1 | 2023-02-21 12:34:35 | NULL            |        1 | []          |
-+----+--------+---------------------+-----------------+----------+-------------+
-1 row in set (0.01 sec)
 ```
+
+```sql
+Query OK, 1 row affected (0.02 sec)
+```
+
+```sql
+INSERT INTO zaps (zap_id, owned_by) VALUES (1, 1);
+```
+
+```sql
+Query OK, 1 row affected (0.03 sec)
+```
+
+```sql
+TABLE zaps;
+```
+
+<details>
+  <summary>What is `TABLE`?</summary>
+
+
+  Syntactic sugar (a shortcut) for `SELECT * FROM <table>`.
+
+```sql
++----+--------+---------------------+-----------------+----------+
+| id | zap_id | created_at          | last_updated_at | owned_by |
++----+--------+---------------------+-----------------+----------+
+|  1 |      1 | 2023-02-27 10:25:01 | NULL            |        1 |
++----+--------+---------------------+-----------------+----------+
+1 row in set (0.00 sec)
+```
+
+</details>
 
 We can `JOIN` on this if we want.
 
 ```sql
-mysql>
 SELECT
   *
 FROM
   users
-  JOIN zaps ON users.user_id = zaps.owned_by\G
+JOIN zaps ON users.user_id = zaps.owned_by\G
 *************************** 1. row ***************************
              id: 1
      first_name: Stephan
       last_name: Garland
         user_id: 1
+          email: NULL
              id: 1
          zap_id: 1
-     created_at: 2023-02-21 13:03:33
+     created_at: 2023-02-27 10:25:01
 last_updated_at: NULL
        owned_by: 1
-    shared_with: []
-1 row in set (0.00 sec)
-
+1 row in set (0.01 sec)
 ```
 
 That's all well and good, but what if I want to delete my account? Wouldn't it be nice if devs didn't have to worry about deleting every trace of my existence? Or what if everyone's user ID has to change for a migration? Enter foreign keys.
@@ -718,10 +787,176 @@ ADD
   REFERENCES users (user_id)
   ON UPDATE CASCADE
   ON DELETE CASCADE;
+```
+
+```sql
 Query OK, 1 row affected (0.50 sec)
 Records: 1  Duplicates: 0  Warnings: 0
+```
 
-mysql> SHOW CREATE TABLE zaps\G
+```sql
+SHOW CREATE TABLE zaps\G
+```
+
+<details>
+  <summary>What is this?</summary>
+
+  `SHOW CREATE TABLE` is a command that lets you view the query that would be used to create the table in its current state. It's safe to do, and is a good way to view columns, their types, indexes, foreign keys, etc. for a given table.
+  </summary>
+</details>
+
+```sql
+*************************** 1. row ***************************
+       Table: zaps
+Create Table: CREATE TABLE `zaps` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `zap_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `last_updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  `owned_by` bigint unsigned NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `zap_id` (`zap_id`),
+  KEY `owned_by` (`owned_by`),
+  CONSTRAINT `zaps_ibfk_1` FOREIGN KEY (`owned_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+1 row in set (0.00 sec)
+```
+
+Note that not only do we now have a `FOREIGN KEY` linking `zaps.owned_by` to `users.user_id`, but InnoDB has added an index on `zaps.owned_by` - this is required, and despite the documentation informing you that you must do this before adding the foreign key, it actually does it for you if you don't.
+
+#### Demonstrating a foreign key
+
+```sql
+UPDATE users SET user_id = 9 WHERE id = 1;
+```
+
+Note the `WHERE` predicate - we'll go more into that later, but the most important thing to take away here is that there are very few instances where you should issue DML like `UPDATE`without a `WHERE`.
+
+<details>
+  <summary> Why not?</summary>
+
+  If there was no predicate, the query would apply to everything in the table, e.g. every user would be modified.
+
+</details>
+
+```sql
+Query OK, 1 row affected (0.02 sec)
+Rows matched: 1  Changed: 1  Warnings: 0
+```
+
+```sql
+SELECT * FROM users
+  JOIN zaps ON
+users.user_id = zaps.owned_by\G
+```
+
+```sql
+*************************** 1. row ***************************
+             id: 1
+     first_name: Stephan
+      last_name: Garland
+        user_id: 9
+          email: NULL
+             id: 1
+         zap_id: 1
+     created_at: 2023-02-27 10:25:01
+last_updated_at: NULL
+       owned_by: 9
+1 row in set (0.01 sec)
+```
+
+And just like that, `zaps` has updated its `owned_by` value for that Zap to equal the new value in `users`. And if we delete the `users` entry, the same `CASCADE` action will follow.
+
+```sql
+DELETE FROM users WHERE id = 1;
+```
+
+```sql
+Query OK, 1 row affected (0.02 sec)
+```
+
+```sql
+SELECT * FROM zaps;
+```
+
+```sql
+Empty set (0.00 sec)
+```
+
+## Column operations
+
+### Adding columns
+
+Adding columns is done with `ALTER TABLE`:
+
+```sql
+ALTER TABLE
+  zaps
+ADD COLUMN
+  shared_with
+JSON;
+```
+
+```sql
+Query OK, 0 rows affected (0.18 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+```
+
+Just as with a table definition, the column's name (`shared_with`) and type (`JSON`) are required; additonal qualifiers like `DEFAULT`, `UNIQUE`, etc. may be appended. To add some types of default values, like a JSON array, you must call the function.
+
+  * [MySQL supports JSON](https://dev.mysql.com/doc/refman/8.0/en/json.html) as a data type! While you can of course simply store JSON strings in a text column, there are some benefits to using the native JSON datatype; among them that you can index scalars from the JSON objects, and that you can extract specific keys/values from the objects instead of the entire string.
+  * Please don't use this as an excuse to treat MySQL as a Document DB, though. If you want NoSQL, you should use NoSQL. RDBMS are optimized for relations. Storing some information in JSON is fine, but it shouldn't be the default.
+
+### Modfying columns
+
+This was covered earlier during [table operations](#table-operations), but as a refresher, we'll again use `ALTER TABLE` to add a `DEFAULT` value of an empty JSON array, which must be called as its function:
+
+```sql
+ALTER TABLE
+  zaps
+MODIFY COLUMN
+shared_with
+  JSON
+  DEFAULT (
+    JSON_ARRAY()
+  );
+```
+
+```sql
+Query OK, 0 rows affected (0.09 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+```
+
+### Dropping columns
+
+If there are foreign keys relying on the column you're trying to drop, you will first need to either disable foreign key checks, or remove those checks before you can drop the column.
+
+```sql
+DROP TABLE users;
+```
+
+```sql
+ERROR 3730 (HY000): Cannot drop table 'users' referenced by a foreign key constraint 'zaps_ibfk_1' on table 'zaps'.
+```
+
+```sql
+SET foreign_key_checks = 0;
+```
+
+```sql
+Query OK, 0 rows affected (0.01 sec)
+```
+
+```sql
+DROP TABLE users;
+Query OK, 0 rows affected (0.30 sec)
+```
+
+```sql
+SHOW CREATE TABLE zaps\G
+```
+
+```sql
 *************************** 1. row ***************************
        Table: zaps
 Create Table: CREATE TABLE `zaps` (
@@ -739,96 +974,132 @@ Create Table: CREATE TABLE `zaps` (
 1 row in set (0.00 sec)
 ```
 
-Note that not only do we now have a `FOREIGN KEY` linking `zaps.owned_by` to `users.user_id`, but InnoDB has added an index on `zaps.owned_by` - this is required, and despite the documentation informing you that you must do this before adding the foreign key, it actually does it for you if you don't.
+Just because MySQL let us drop the table, it doesn't mean it cleaned up after us.
+<details>
+  <summary>How can we remove the FK?</summary>
 
-#### Demonstrating a foreign key
+  ```sql
+  ALTER TABLE zaps DROP CONSTRAINT `zaps_ibfk_1`;
+  ```
 
-```sql
-mysql> UPDATE users SET user_id = 9 WHERE id = 1;
-Query OK, 1 row affected (0.02 sec)
-Rows matched: 1  Changed: 1  Warnings: 0
+  ```sql
+  Query OK, 0 rows affected (0.20 sec)
+  Records: 0  Duplicates: 0  Warnings: 0
+  ```
+</details>
 
-mysql>
-SELECT * FROM users
-  JOIN zaps ON
-    users.user_id = zaps.owned_by\G
-*************************** 1. row ***************************
-*************************** 1. row ***************************
-             id: 1
-     first_name: Stephan
-      last_name: Garland
-        user_id: 9
-             id: 1
-         zap_id: 1
-     created_at: 2023-02-21 13:03:33
-last_updated_at: NULL
-       owned_by: 9
-    shared_with: []
-1 row in set (0.01 sec)
-```
-
-And just like that, `zaps` has updated its `owned_by` value for that Zap to equal the new value in `users`. And if we delete the `users` entry, the same `CASCADE` action will follow.
+Also, don't forget to re-enable `foreign_key_checks` for your session.
 
 ```sql
-
-mysql> DELETE FROM users WHERE id = 1;
-Query OK, 1 row affected (0.02 sec)
-
-mysql> SELECT * FROM zaps;
-Empty set (0.00 sec)
+SET foreign_key_checks = 1;
 ```
-
-## Column operations
-
-### Adding columns
-
-Adding columns is done with `ALTER TABLE`:
 
 ```sql
-mysql>
-ALTER TABLE
-  zaps
-ADD COLUMN
-shared_with
-  JSON;
-Query OK, 0 rows affected (0.18 sec)
-Records: 0  Duplicates: 0  Warnings: 0
+Query OK, 0 rows affected (0.00 sec)
 ```
 
-Just as with a table definition, the column's name (`shared_with`) and type (`JSON`) are required; additonal qualifiers like `DEFAULT`, `UNIQUE`, etc. may be appended. To add some types of default values, like a JSON array, you must call the function.
+But wait, how are we going to get back the `users` table? We could scroll back up and find the definition, but wouldn't it be nice if we could copy the definition from somewhere else?
 
-### Modfying columns
+### Copied table definitions
 
-This was covered earlier during [table operations](#table-operations), but as a refresher, we'll again use `ALTER TABLE` to add a `DEFAULT` value of an empty JSON array, which must be called as its function:
+Luckily, this exists in the form of `CREATE TABLE LIKE`. [MySQL docs](https://dev.mysql.com/doc/refman/8.0/en/create-table-like.html). You do need `SELECT` privileges from the schema/table you're copying from, which is enabled for `test.ref_%` with this user. You'll also need to specify the schema the table exists in, since it's outside of the currently selected schema.
+
+NOTE: This schema is somewhat different from what we created before; most of it is additional, but one big change is that there is no longer an explicit `id` column, instead, the `user_id` column takes its place.
 
 ```sql
-mysql>
-ALTER TABLE
-  zaps
-MODIFY COLUMN
-shared_with
-  JSON
-  DEFAULT (
-    JSON_ARRAY()
-  );
-Query OK, 0 rows affected (0.09 sec)
-Records: 0  Duplicates: 0  Warnings: 0
+CREATE TABLE users LIKE test.ref_users;
 ```
-
-### Dropping columns
-
-First, we'll create a nonsense column quickly, so we can drop it. Note that if there are foreign keys relying on this, you will first need to either disable foreign key checks, or remove those checks before you can drop the column.
 
 ```sql
-mysql>
-mysql> ALTER TABLE zaps ADD COLUMN foo INT;
-Query OK, 0 rows affected (0.26 sec)
-Records: 0  Duplicates: 0  Warnings: 0
-
-mysql> ALTER TABLE zaps DROP COLUMN foo;
-Query OK, 0 rows affected (0.33 sec)
-Records: 0  Duplicates: 0  Warnings: 0
+Query OK, 0 rows affected (0.34 sec)
 ```
+
+There are some restrictions. The documentation lists all of them, but the biggest one is that any foreign keys aren't copied. We deleted ours so it doesn't really matter, but this could catch you by surprise if you expected them to come over with the schema definition. Also, depending on the version of MySQL you're using, a bug may exist where tables copied in this manner will logically reside (that is, within a given tablespace file) in the original table's tablespace. A way around this is with this alternative query:
+
+```sql
+CREATE TABLE users SELECT * FROM test.ref_users LIMIT 0;
+```
+
+Finally, note that both of these _only_ copy the schema definition, not the data. The table you're copying from actually has thousands of rows in it, but none of those will be in your table.
+
+<details>
+  <summary>What if you wanted to copy data as well?</summary>
+
+  The above alternative query hopefully hinted at it!
+
+  ```sql
+  DROP TABLE users; CREATE TABLE users SELECT * FROM test.ref_users LIMIT 1000;
+  ```
+
+  ```sql
+  Query OK, 0 rows affected (0.30 sec)
+
+  Query OK, 1000 rows affected (1.14 sec)
+  Records: 1000  Duplicates: 0  Warnings: 0
+  ```
+</details>
+
+#### Copied table data and truncating
+
+Now that we have `users` back, let's actually fill it with more than just 1000 rows. `test.ref_users_big` has 1,000,000 rows. That would take a while to fill for everyone (my poor spinning disks), but 10,000 is reasonable.
+
+First, let's dump the existing values, but leave the table definition. While there are a few ways to do this, the fastest is `TRUNCATE` ([MySQL docs](https://dev.mysql.com/doc/refman/8.0/en/truncate-table.html)). This is a `DDL` operation vs. `DML`, as instead of iterating through the table and deleting each row, it stores the table definition, drops the table, then re-creates it. This does have several limitations, especially with foreign keys, but it works fine here.
+
+```sql
+TRUNCATE TABLE users;
+```
+
+```sql
+Query OK, 0 rows affected (0.42 sec)
+```
+
+`0 rows affected` may be confusing, as we in fact just affected 1000 rows, but remember that this is the same as a `DROP TABLE`, which similarly doesn't report on the number of rows removed.
+
+Now, we can copy into the table:
+
+```sql
+INSERT INTO users SELECT * FROM test.ref_users_big LIMIT 10000;
+```
+
+```sql
+Query OK, 10000 rows affected (5.33 sec)
+Records: 10000  Duplicates: 0  Warnings: 0
+```
+
+### Transactions
+
+Remember the discussion about doing `DML` without a predicate? There's a fix for that.
+
+```sql
+START TRANSACTION;
+```
+
+```sql
+Query OK, 0 rows affected (0.00 sec)
+```
+
+```sql
+UPDATE users SET city = "Asheville";
+```
+
+```sql
+Query OK, 9999 rows affected (6.96 sec)
+Rows matched: 10000  Changed: 9999  Warnings: 0
+```
+
+Uh-oh. Looks like everyone has moved to Western North Carolina.
+
+```sql
+ROLLBACK;
+```
+
+```sql
+Query OK, 0 rows affected (5.45 sec)
+```
+
+Whew, not fired.
+
+NOTE: Canceling a query (`Ctrl-C`), _regardless of whether or not you're in a transaction_, has the same effect, assuming the InnoDB storage engine is being used. This is the `A` in `ACID` at work - either the entire query succeeds, or none of it does. However, the rollback may take some time depending on how many rows have been affected. Also, if you don't manage to cancel the query before it completes, you're out of luck.
 
 ### Generated columns
 
@@ -838,30 +1109,103 @@ What if you wanted a column that automatically created data for you based on oth
 ALTER TABLE
   users
 ADD COLUMN
-full_name VARCHAR(510) GENERATED ALWAYS AS (
+  full_name VARCHAR(510) GENERATED ALWAYS AS (
     CONCAT_WS(', ', last_name, first_name)
   );
+```
+
+```sql
 Query OK, 0 rows affected (0.34 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 ```
 
-Note that by default, this will create a `VIRTUAL` column (you can specify `STORED` after `AS` if you'd rather have a normal column), which is not actually stored, but instead calculated at query time. While this takes no storage space, it does add some amount of computational load, and more importantly comes with a [huge list](https://dev.mysql.com/doc/refman/8.0/en/create-table-generated-columns.html) of limitations. One large benefit, however, is that since the columns aren't actually created when the query is ran, the operation takes as long as a normal `ALTER TABLE` operation. If stored, the data must be written to the table, which will necessitate taking write locks.
+```sql
+SELECT user_id, full_name, city, country
+  FROM users
+LIMIT 10;
+```
 
 ```sql
-mysql>
-INSERT INTO
-  users (first_name, last_name, user_id)
-VALUES
-  ("Stephan", "Garland", 42);
-Query OK, 1 row affected (0.05 sec)
++---------+-------------------+-------------+----------------+
+| user_id | full_name         | city        | country        |
++---------+-------------------+-------------+----------------+
+|       1 | MacPherson, Addie | Latina      | Italy          |
+|       2 | Airla, Valaree    | Pribram     | Czech Republic |
+|       3 | Nett, Sheppard    | Hamada      | Japan          |
+|       4 | Kirschner, Robby  | Bikaner     | India          |
+|       5 | Bilski, Lewiss    | Vörderås    | Sweden         |
+|       6 | Yamauchi, Marleah | Rotterdam   | Netherlands    |
+|       7 | Calore, Ania      | Miyakojima  | Japan          |
+|       8 | Breger, Gratiana  | Valkeakoski | Finland        |
+|       9 | Serafina, Janith  | Morant Bay  | Jamaica        |
+|      10 | Beckman, Pavla    | Wackersdorf | Germany        |
++---------+-------------------+-------------+----------------+
+10 rows in set (0.01 sec)
+```
 
-mysql> SELECT * FROM users;
-+----+------------+-----------+---------+------------------+
-| id | first_name | last_name | user_id | full_name        |
-+----+------------+-----------+---------+------------------+
-|  1 | Stephan    | Garland   |      42 | Garland, Stephan |
-+----+------------+-----------+---------+------------------+
-1 row in set (0.00 sec)
+Note that by default, this will create a `VIRTUAL` column (you can specify `STORED` after `AS` if you'd rather have a normal column), which is not actually stored, but instead calculated at query time. While this takes no storage space, it does add some amount of computational load, and more importantly comes with a [huge list](https://dev.mysql.com/doc/refman/8.0/en/create-table-generated-columns.html) of limitations. One large benefit, however, is that since the columns aren't actually created when the query is ran, the operation takes as long as a normal `ALTER TABLE` operation. If stored, the data must be written to the table, which will necessitate taking write locks. Also, since the column isn't actually being written anywhere, you can actually place the columns in any table position (by default, adding a column just appends to the end of the table) while still using the `INSTANT` algorithm, despite what the docs imply.
+
+The creation and deletion time in particular is markedly better when compared to `STORED` columns:
+
+```sql
+ALTER TABLE
+  users
+ADD COLUMN
+  full_name VARCHAR(510) GENERATED ALWAYS AS (
+    CONCAT_WS(', ', last_name, first_name)
+  ) STORED;
+```
+
+```sql
+Query OK, 10000 rows affected (7.23 sec)
+Records: 10000  Duplicates: 0  Warnings: 0
+```
+
+```sql
+ALTER TABLE
+  users
+DROP COLUMN full_name;
+```
+
+```sql
+Query OK, 0 rows affected (2.24 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+```
+
+Demonstrating column positioning:
+
+```sql
+ALTER TABLE
+  users
+ADD COLUMN
+  full_name VARCHAR(510) GENERATED ALWAYS AS (
+    CONCAT_WS(', ', last_name, first_name)
+  )
+AFTER
+  last_name;
+```
+
+```sql
+Query OK, 0 rows affected (0.27 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+```
+
+```sql
+SELECT * FROM users LIMIT 1\G
+```
+
+```sql
+*************************** 1. row ***************************
+        user_id: 1
+     first_name: Addie
+      last_name: MacPherson
+      full_name: MacPherson, Addie
+          email: addie.macpherson@lizard.com
+           city: Latina
+        country: Italy
+     created_at: 2001-05-27 19:47:17
+last_updated_at: NULL
+1 row in set (0.01 sec)
 ```
 
 ### Invisible columns
@@ -869,81 +1213,144 @@ mysql> SELECT * FROM users;
 You can make columns `INVISIBLE` if you'd rather they not show up unless specifically queried for. This is done with the `INVISIBLE` keyword after the type (`VARCHAR(510)` here) if being created, or modified later with `ALTER COLUMN`:
 
 ```sql
-mysql> ALTER TABLE users ALTER COLUMN full_name SET INVISIBLE;
+ALTER TABLE users ALTER COLUMN full_name SET INVISIBLE;
+```
+
+```sql
 Query OK, 0 rows affected (0.19 sec)
 Records: 0  Duplicates: 0  Warnings: 0
+```
 
-mysql> SELECT * FROM users;
-+----+------------+-----------+---------+
-| id | first_name | last_name | user_id |
-+----+------------+-----------+---------+
-|  1 | Stephan    | Garland   |      42 |
-+----+------------+-----------+---------+
+```sql
+SELECT * FROM users LIMIT 1\G
+```
+
+```sql
+*************************** 1. row ***************************
+        user_id: 1
+     first_name: Addie
+      last_name: MacPherson
+          email: addie.macpherson@lizard.com
+           city: Latina
+        country: Italy
+     created_at: 2001-05-27 19:47:17
+last_updated_at: NULL
 1 row in set (0.00 sec)
-
-mysql> SELECT *, full_name FROM users;
-+----+------------+-----------+---------+------------------+
-| id | first_name | last_name | user_id | full_name        |
-+----+------------+-----------+---------+------------------+
-|  1 | Stephan    | Garland   |      42 | Garland, Stephan |
-+----+------------+-----------+---------+------------------+
+Query OK, 0 rows affected (0.19 sec)
+Records: 0  Duplicates: 0  Warnings: 0
 1 row in set (0.00 sec)
 ```
 
 To set them back to visible, use `SET VISIBLE`:
 
 ```sql
-mysql> ALTER TABLE users ALTER COLUMN full_name SET VISIBLE;
+ALTER TABLE users ALTER COLUMN full_name SET VISIBLE;
+```
+
+```sql
 Query OK, 0 rows affected (0.08 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 ```
 
 ## Queries
 
-We're going to need some more data to play around with, so it's time to shift gears. [Northwind Traders](https://en.wikiversity.org/wiki/Database_Examples/Northwind) is the Hello World of databases. It was created by Microsoft in the 1990s for Access, and is publicly licensed. I've loaded it into this instance, under the schema `northwind`.
-
-```sql
-mysql> USE northwind;
-Database changed
-```
-
 In order to find out how many rows are in each table, there are a few ways of doing so. InnoDB maintains information about tables in the `INFORMATION_SCHEMA.TABLES` table, including an estimate of row count. However, it's just that - an estimate. It can be made to be accurate if you use `ANALYZE TABLE`, but in production, you shouldn't do this (to be clear, it should be done, but carefully), since it places a table-wide read lock during the process. You can also use the query `SELECT COUNT(*)`, but that will perform a table scan (where the entire table is read sequentially, without indices), so it may have a performance impact on the database, as it's consuming a lot of available IOPS. Finally, assuming you have an auto-incrementing `id` field in the table, you can use `SELECT id FROM <table> ORDER BY id DESC LIMIT 1` to get the last incremented value. This is also an estimate, since it doesn't take any deletions into account (auto-increment is monotonic), but it's extremely fast.
 
-Since this isn't production, we can force a refresh of our table statistics to get accurate counts. This will cause viewing the table's statistics to refresh the table statistics, and the variable is reset to its old value afterwards.
+```sql
+SELECT table_name, table_rows
+FROM
+  information_schema.tables
+WHERE table_schema = 'test';
+```
 
 ```sql
-mysql> SET @old_innodb_stats_on_metadata = @@global.innodb_stats_on_metadata;
-mysql> SET GLOBAL innodb_stats_on_metadata='ON';
-
-mysql> SELECT table_name, table_rows FROM information_schema.tables WHERE table_schema = 'northwind';
-+-----------------------------+------------+
-| TABLE_NAME                  | TABLE_ROWS |
-+-----------------------------+------------+
-| customers                   |         29 |
-| employee_privileges         |          1 |
-| employees                   |          9 |
-| inventory_transaction_types |          4 |
-| inventory_transactions      |        102 |
-| invoices                    |         35 |
-| order_details               |         58 |
-| order_details_status        |          6 |
-| orders                      |         48 |
-| orders_status               |          4 |
-| orders_tax_status           |          2 |
-| privileges                  |          1 |
-| products                    |         45 |
-| purchase_order_details      |         55 |
-| purchase_order_status       |          4 |
-| purchase_orders             |         28 |
-| sales_reports               |          5 |
-| shippers                    |          3 |
-| strings                     |         62 |
-| suppliers                   |         10 |
-+-----------------------------+------------+
-20 rows in set (0.22 sec)
-
-mysql> SET GLOBAL innodb_stats_on_metadata = @old_innodb_stats_on_metadata;
++---------------+------------+
+| TABLE_NAME    | TABLE_ROWS |
++---------------+------------+
+| gensql        |       1000 |
+| ref_users     |       1000 |
+| ref_users_big |     992839 |
+| ref_zaps      |          0 |
+| ref_zaps_big  |          0 |
+| users         |       1000 |
+| zaps          |          0 |
++---------------+------------+
+7 rows in set (0.01 sec)
 ```
+
+```sql
+ANALYZE TABLE ref_zaps; ANALYZE TABLE ref_zaps_big;
+```
+
+```sql
++---------------+---------+----------+----------+
+| Table         | Op      | Msg_type | Msg_text |
++---------------+---------+----------+----------+
+| test.ref_zaps | analyze | status   | OK       |
++---------------+---------+----------+----------+
+1 row in set (0.03 sec)
+
++-------------------+---------+----------+----------+
+| Table             | Op      | Msg_type | Msg_text |
++-------------------+---------+----------+----------+
+| test.ref_zaps_big | analyze | status   | OK       |
++-------------------+---------+----------+----------+
+1 row in set (0.05 sec)
+```
+
+```sql
+SELECT table_name, table_rows
+FROM
+  information_schema.tables
+WHERE table_schema = 'test';
+```
+
+```sql
++---------------+------------+
+| TABLE_NAME    | TABLE_ROWS |
++---------------+------------+
+| gensql        |       1000 |
+| ref_users     |       1000 |
+| ref_users_big |     992839 |
+| ref_zaps      |       1000 |
+| ref_zaps_big  |     997211 |
+| users         |       1000 |
+| zaps          |          0 |
++---------------+------------+
+7 rows in set (0.02 sec)
+```
+
+Actual row count:
+
+```sql
+SELECT
+  'ref_users_big' AS 'table_name',
+  COUNT(*) AS 'row_count'
+FROM
+  ref_users_big
+UNION
+SELECT
+  'ref_zaps_big',
+  COUNT(*)
+FROM
+  ref_zaps_big;
+```
+
+```sql
++---------------+-----------+
+| table_name    | row_count |
++---------------+-----------+
+| ref_users_big |   1000000 |
+| ref_zaps_big  |   1000000 |
++---------------+-----------+
+2 rows in set (2.42 sec)
+```
+
+<details>
+  <summary>What's a UNION?</summary>
+
+  A way to combine query results, regardless of any relation between tables or queries.
+</details>
 
 ### SELECT
 
@@ -951,6 +1358,41 @@ mysql> SET GLOBAL innodb_stats_on_metadata = @old_innodb_stats_on_metadata;
 
 You use it to select data from tables (or `/dev/stdin`). Any questions?
 
+```sql
+SELECT * FROM ref_zaps LIMIT 10 OFFSET 15;
+```
+
+```sql
++--------+----------+----------------------+---------------------+-----------------+
+| zap_id | owned_by | shared_with          | created_at          | last_updated_at |
++--------+----------+----------------------+---------------------+-----------------+
+|     16 |      788 | []                   | 2013-10-16 21:25:30 | NULL            |
+|     17 |      689 | []                   | 2016-07-21 03:05:33 | NULL            |
+|     18 |      735 | []                   | 2020-12-16 13:51:04 | NULL            |
+|     19 |      802 | []                   | 2009-11-22 03:33:19 | NULL            |
+|     20 |      297 | [529, 805, 541, 498] | 1997-07-11 15:05:07 | NULL            |
+|     21 |      649 | []                   | 2015-05-18 20:08:31 | NULL            |
+|     22 |      438 | []                   | 2006-12-14 15:28:30 | NULL            |
+|     23 |      607 | []                   | 2013-04-15 17:57:19 | NULL            |
+|     24 |      460 | []                   | 2018-01-28 02:05:59 | NULL            |
+|     25 |      677 | []                   | 1995-06-07 21:46:30 | NULL            |
++--------+----------+----------------------+---------------------+-----------------+
+10 rows in set (0.01 sec)
+```
+
+<details>
+<summary>Can you think of anything missing from this table? (HINT: SHOW CREATE TABLE)</summary>
+
+  There's no foreign key linking `owned_by` to a given user! In fact, they're just randomly generated numbers, but there are pairings. Let's create a foreign key now:
+  ```sql
+  ALTER TABLE ref_zaps ADD CONSTRAINT zap_owner_id FOREIGN KEY (owned_by) REFERENCES ref_users (user_id);
+  ```
+
+  ```sql
+  Query OK, 1000 rows affected (0.90 sec)
+  Records: 1000  Duplicates: 0  Warnings: 0
+  ```
+<details>
 
 ### INSERT
 
@@ -960,85 +1402,127 @@ You use it to select data from tables (or `/dev/stdin`). Any questions?
 `INSERT` is used to insert rows into a table. There is also an `UPSERT` equivalent, with the `ON DUPLICATE KEY UPDATE` clause. With this, if an `INSERT` would cause a key collision with a `UNIQUE` index (explicit or implicit, e.g. `PRIMARY KEY`), then an `UPDATE` of that row occurs instead.
 
 ```sql
-mysql> INSERT INTO users (first_name, last_name, user_id)
+INSERT INTO users
+  first_name, last_name, user_id)
 VALUES
   ("Leeroy", "Jenkins", 42);
-ERROR 1062 (23000): Duplicate entry '42' for key 'users.user_id'
-
-mysql> INSERT INTO users (first_name, last_name, user_id)
-VALUES
-  ("Leeroy", "Jenkins", 42) ON DUPLICATE KEY
-UPDATE
-  first_name =
-VALUES
-  (first_name),
-  last_name =
-VALUES
-  (last_name);
-Query OK, 2 rows affected, 2 warnings (0.02 sec)
-
-mysql> SHOW WARNINGS\G
-*************************** 1. row ***************************
-  Level: Warning
-   Code: 1287
-Message: 'VALUES function' is deprecated and will be removed in a future release.
-Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col)
-in the ON DUPLICATE KEY UPDATE clause with alias.col instead
-*************************** 2. row ***************************
-  Level: Warning
-   Code: 1287
-Message: 'VALUES function' is deprecated and will be removed in a future release.
-Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col)
-in the ON DUPLICATE KEY UPDATE clause with alias.col instead
-2 rows in set (0.00 sec)
-
-mysql> TABLE users;
-+----+------------+-----------+---------+-----------------+
-| id | first_name | last_name | user_id | full_name       |
-+----+------------+-----------+---------+-----------------+
-|  1 | Leeroy     | Jenkins   |      42 | Jenkins, Leeroy |
-+----+------------+-----------+---------+-----------------+
-1 row in set (0.00 sec)
 ```
 
-There's a deprecation warning, so we can do this again as it asked us to:
+```sql
+ERROR 1062 (23000): Duplicate entry '42' for key 'users.PRIMARY'
+```
 
-```mysql
-mysql> INSERT INTO users (first_name, last_name, user_id)
-VALUES
-  ("Stephan", "Garland", 42) AS vals ON DUPLICATE KEY
-UPDATE
-  first_name = vals.first_name,
-  last_name = vals.last_name;
-Query OK, 2 rows affected (0.04 sec)
+Expectedly, that failed since `user_id`, which is our primary key, already has an entry at `42`.
 
-mysql> TABLE users;
-+----+------------+-----------+---------+------------------+
-| id | first_name | last_name | user_id | full_name        |
-+----+------------+-----------+---------+------------------+
-|  1 | Stephan    | Garland   |      42 | Garland, Stephan |
-+----+------------+-----------+---------+------------------+
+```sql
+SELECT * FROM
+  users
+WHERE
+  user_id = 42\G
+```
+
+```sql
+*************************** 1. row ***************************
+        user_id: 42
+     first_name: Ramona
+      last_name: Odelet
+      full_name: Odelet, Ramona
+          email: ramona.odelet@lucid.com
+           city: Foligno
+        country: Italy
+     created_at: 2003-07-29 07:34:15
+last_updated_at: NULL
 1 row in set (0.01 sec)
 ```
 
-Now, let's add Leeroy back in with his own unique `user_id`:
+Now we can try again, this time with an instruction to perform an UPSERT.
 
-```mysql
-mysql> INSERT INTO users (first_name, last_name, user_id)
-  VALUES ("Leeroy", "Jenkins", 6);
-Query OK, 1 row affected (0.09 sec)
-
-mysql> TABLE users;
-+----+------------+-----------+---------+------------------+
-| id | first_name | last_name | user_id | full_name        |
-+----+------------+-----------+---------+------------------+
-|  1 | Stephan    | Garland   |      42 | Garland, Stephan |
-|  5 | Leeroy     | Jenkins   |       6 | Jenkins, Leeroy  |
-+----+------------+-----------+---------+------------------+
-2 rows in set (0.00 sec)
+```sql
+INSERT INTO users
+  (first_name, last_name, user_id)
+VALUES
+  ("Leeroy", "Jenkins", 42) AS vals
+ON DUPLICATE KEY UPDATE
+  first_name = vals.first_name,
+  last_name = vals.last_name;
 ```
 
-An interesting thing has happened here with `id` (an `AUTO INCREMENTING` column). Even though we've only added one new row, and updated the existing one twice, `id` is now set to 5. This is because every `INSERT`, regardless of its success, causes the value to increment. If you add up the statements, you'll find the initial insertion (`1`), a failed insertion (`2`), two implicit `UPDATE` (`3-4`), and finally the new entry (`5`).
+```sql
+Query OK, 2 rows affected (0.21 sec)
+```
+
+```sql
+SELECT * FROM users WHERE user_id = 42\G
+```
+
+```sql
+*************************** 1. row ***************************
+        user_id: 42
+     first_name: Leeroy
+      last_name: Jenkins
+      full_name: Jenkins, Leeroy
+          email: ramona.odelet@lucid.com
+           city: Foligno
+        country: Italy
+     created_at: 2003-07-29 07:34:15
+last_updated_at: 2023-02-27 13:24:26
+1 row in set (0.01 sec)
+```
+
+While `full_name` updated, since it's a `GENERATED` column, `email` is now incorrect. Also, note that `last_updated_at` has changed from `NULL`, since we've modified the row.
+
+Let's put the row back to how it was before.
+
+<details>
+  <summary>How can this be accomplished?</summary>
+
+  ```sql
+  -- first, let's be safe with a transaction
+  START TRANSACTION;
+  ```
+
+  ```sql
+  Query OK, 0 rows affected (0.01 sec)
+  ```
+
+  ```sql
+  -- then, use UPDATE
+  UPDATE users SET first_name = 'Ramona', last_name = 'Odelet' WHERE user_id = 42;
+  ```
+
+  ```sql
+  Query OK, 1 row affected (0.01 sec)
+  Rows matched: 1  Changed: 1  Warnings: 0
+  ```
+
+  ```sql
+  -- next, verify the work
+  SELECT * FROM users WHERE user_id = 42\G
+  ```
+
+  ```sql
+  *************************** 1. row ***************************
+          user_id: 42
+       first_name: Ramona
+        last_name: Odelet
+        full_name: Odelet, Ramona
+            email: ramona.odelet@lucid.com
+             city: Foligno
+          country: Italy
+       created_at: 2003-07-29 07:34:15
+  last_updated_at: 2023-02-27 13:30:10
+  1 row in set (0.00 sec)
+  ```
+
+  ```sql
+  -- finally, commit the result
+  COMMIT;
+  ```
+
+  ```sql
+  Query OK, 0 rows affected (0.08 sec)
+  ```
+</details>
 
 ### TABLE
 
@@ -1047,174 +1531,22 @@ An interesting thing has happened here with `id` (an `AUTO INCREMENTING` column)
 `TABLE` is syntactic sugar for `SELECT * FROM <table>`. Works great if you know the table is small, but be careful on large tables!
 
 ```sql
-mysql> TABLE users;
-+----+------------+-----------+---------+------------------+
-| id | first_name | last_name | user_id | full_name        |
-+----+------------+-----------+---------+------------------+
-|  1 | Stephan    | Garland   |      42 | Garland, Stephan |
-+----+------------+-----------+---------+------------------+
-1 row in set (0.00 sec)
+TABLE users\G
 ```
 
-### WITH (Common Table Expressions)
-
-[MySQL docs.](https://dev.mysql.com/doc/refman/8.0/en/with.html)
-
-`WITH` can be used to create a temporary named result set, scoped to the statement in which it exists. They can also be recursive. A demonstration that's probably not useful in reality follows, but it does demonstrate how MySQL can be made to use indexes, even when it normally couldn't. Here, we're trying to select a random row from a large table. The row ID is selected with a sub-query that multiplies the output of `RAND()` (a float between 0-1) by the last `id` row in the table.
-
 ```sql
-mysql>
-EXPLAIN ANALYZE SELECT
-  *
-FROM
-  ref_users
-WHERE
-  id = (
-    SELECT
-      FLOOR(
-        (
-          SELECT
-            RAND() * (
-              SELECT
-                id
-              FROM
-                ref_users
-              ORDER BY
-                id DESC
-              LIMIT
-                1
-            )
-        )
-      )
-  );
-*************************** 1. row ***************************
-EXPLAIN: -> Filter: (ref_users.id = floor((rand() * (select #4))))  (cost=10799.04 rows=99735) (actual time=1545.462..8220.073 rows=3 loops=1)
-    -> Table scan on ref_users  (cost=10799.04 rows=997354) (actual time=0.441..6723.994 rows=1000000 loops=1)
-    -> Select #4 (subquery in condition; run only once)
-        -> Limit: 1 row(s)  (cost=0.00 rows=1) (actual time=0.079..0.079 rows=1 loops=1)
-            -> Index scan on ref_users using PRIMARY (reverse)  (cost=0.00 rows=1) (actual time=0.077..0.077 rows=1 loops=1)
-
-1 row in set, 2 warnings (8.22 sec)
-```
-
-Since `RAND()` is evaluated for every row [when used with WHERE](https://dev.mysql.com/doc/refman/8.0/en/mathematical-functions.html#function_rand), it's not constant, and thus can't be used with indices. Also, you may wind up with more than one result!
-
-If instead the `RAND()` call is placed into a CTE, it can be optimized:
-
-```sql
-mysql>
-EXPLAIN ANALYZE
-WITH rand AS (
-  SELECT
-    FLOOR(
-      (
-        SELECT
-          RAND() * (
-            SELECT
-              id
-            FROM
-              ref_users
-            ORDER BY
-              id DESC
-            LIMIT
-              1
-          )
-      )
-    )
-)
-SELECT
-  *
-FROM
-  ref_users
-WHERE
-  id IN (TABLE rand);
-*************************** 1. row ***************************
-EXPLAIN: -> Nested loop inner join  (cost=0.55 rows=1) (actual time=0.569..0.583 rows=1 loops=1)
-    -> Filter: (`<subquery2>`.`FLOOR((SELECT RAND() * (SELECT id FROM ref_users ORDER BY id DESC LIMIT 1)))` is not null)  (cost=0.20 rows=1) (actual time=0.085..0.095 rows=1 loops=1)
-        -> Table scan on <subquery2>  (cost=0.20 rows=1) (actual time=0.005..0.012 rows=1 loops=1)
-            -> Materialize with deduplication  (cost=0.00 rows=1) (actual time=0.082..0.090 rows=1 loops=1)
-                -> Filter: (rand.`FLOOR((SELECT RAND() * (SELECT id FROM ref_users ORDER BY id DESC LIMIT 1)))` is not null)  (cost=0.00 rows=1) (actual time=0.017..0.023 rows=1 loops=1)
-                    -> Table scan on rand  (cost=2.61 rows=1) (actual time=0.010..0.014 rows=1 loops=1)
-                        -> Materialize CTE rand  (cost=0.00 rows=1) (actual time=0.013..0.018 rows=1 loops=1)
-                            -> Rows fetched before execution  (cost=0.00 rows=1) (never executed)
-                            -> Select #5 (subquery in projection; run only once)
-                                -> Limit: 1 row(s)  (cost=0.00 rows=1) (actual time=0.313..0.314 rows=1 loops=1)
-                                    -> Index scan on ref_users using PRIMARY (reverse)  (cost=0.00 rows=1) (actual time=0.310..0.310 rows=1 loops=1)
-    -> Filter: (ref_users.id = `<subquery2>`.`FLOOR((SELECT RAND() * (SELECT id FROM ref_users ORDER BY id DESC LIMIT 1)))`)  (cost=0.35 rows=1) (actual time=0.477..0.479 rows=1 loops=1)
-        -> Single-row index lookup on ref_users using PRIMARY (id=`<subquery2>`.`FLOOR((SELECT RAND() * (SELECT id FROM ref_users ORDER BY id DESC LIMIT 1)))`)  (cost=0.35 rows=1) (actual time=0.468..0.469 rows=1 loops=1)
-
-1 row in set, 1 warning (0.00 sec)
-```
-
-## Stored Procedures
-
-[MySQL docs.](https://dev.mysql.com/doc/refman/8.0/en/create-procedure.html)
-
-Stored Procedures (and Stored Functions) are a way to write SQL as functions, to be called as needed. Most normal SQL queries are accepted, as well as conditionals, loops, and the ability to accept arguments and return values. The main difference between the two is that Stored Procedures may accept arguments and write out data to variables, whereas Stored Functions may accept arguments, and return a value.
-
-Their main advantage is that known, tested queries can be stored and later called from an application. Their main disadvantage is that they require people with reasonably good SQL skills to write them, else it's unlikely they'll exceed the performance of an ORM like Django.
-
-As an example, I used this to fill `zaps` with data (NOTE: this is not an example of a well-designed stored procedure, merely one that demonstrates a variety of concepts):
-
-```sql
-DELIMITER // -- This is needed so that the individual commands don't end the stored procedure
-CREATE PROCEDURE insert_zaps(IN num_rows int, IN pct_shared float) -- Two input args are needed
-BEGIN
-  DECLARE loop_count bigint; -- Variables are initialized with a type
-  DECLARE len_table bigint;
-  DECLARE rand_base float;
-  DECLARE rand_offset float;
-  DECLARE rand_ts timestamp;
-  DECLARE rand_user bigint;
-  DECLARE shared_with_user bigint;
-  SELECT id INTO len_table FROM test.ref_users ORDER BY id DESC LIMIT 1; -- SELECT INTO can be used
-  SET loop_count = 1; -- Or, if the value is simple, simply assigned
-  WHILE loop_count <= num_rows DO
-    SET rand_base = RAND();
-    SET rand_offset = RAND();
-    SET rand_ts = TIMESTAMP(
-                    FROM_UNIXTIME(
-                      UNIX_TIMESTAMP(NOW()) - FLOOR(
-                        0 + (
-                          RAND() * 86400 * 365 * 10
-                        )
-                      )
-                    )
-                  ); -- This creates a random timestamp between now and 10 years ago
-    WITH rand AS (
-        SELECT
-          FLOOR(
-            (
-              SELECT
-                rand_base * len_table
-            )
-          )
-      )
-      SELECT
-        id
-      INTO rand_user
-      FROM
-        test.ref_users
-      WHERE
-        id IN (TABLE rand); -- This is the CTE demonstrated earlier to determine the table length
-    INSERT INTO zaps (zap_id, created_at, owned_by) VALUES (loop_count, rand_ts, rand_user);
-    IF ROUND(rand_base, 1) > (1 - pct_shared) THEN -- Roughly determine the amount of shared Zaps
-      SELECT CAST(FLOOR(rand_base * rand_offset * len_table) AS unsigned) INTO shared_with_user;
-      UPDATE
-        zaps
-      SET
-        shared_with = JSON_ARRAY_APPEND(
-          shared_with,
-          '$',
-          shared_with_user
-        ) -- JSON_ARRAY_APPEND(array, key, value)
-      WHERE
-        id = loop_count;
-    END IF;
-    SET loop_count = loop_count + 1;
-  END WHILE;
-  END //
-  DELIMITER ;
+-- 9999 rows are above this...
+*************************** 10000. row ***************************
+        user_id: 10000
+     first_name: Gabrila
+      last_name: Lemmueu
+      full_name: Lemmueu, Gabrila
+          email: gabrila.lemmueu@urgent.com
+           city: Itanagar
+        country: India
+     created_at: 2020-12-10 01:58:35
+last_updated_at: NULL
+10000 rows in set (0.48 sec)
 ```
 
 ## Joins
@@ -1236,10 +1568,16 @@ If you're intersted in exploring relational alegbra, [this application](https://
 
 #### Cross
 
+Before we demonstrate a cross join, you should have two small (very small, like < 10 rows) tables. You can either use what we learned earlier to create a new table from an existing one, or you can use any two of the following two tables: `northwind.orders_status`, `northwind.tax_status_name`, `test.ref_users_tiny`, `test.ref_users_zaps`. You can cross join across schemas if you'd like, although I can't promise the information will make any sense.
+
+
 Also called a Cartesian Join. This produces `n x m` rows for the two groups being joined. That said, every other join can be thought of as a cross join with a predicate. In fact, `CROSS JOIN`, `JOIN`, and `INNER JOIN` are actually syntactically equivalent in MySQL (not ANSI SQL!), but for readability, it's preferred to only use `CROSS JOIN` if you actually intend to use it.
 
 ```sql
-mysql> SELECT * FROM orders_status CROSS JOIN orders_tax_status;
+SELECT * FROM northwind.orders_status CROSS JOIN northwind.orders_tax_status;
+```
+
+```sql
 +----+-------------+----+-----------------+
 | id | status_name | id | tax_status_name |
 +----+-------------+----+-----------------+
@@ -1262,15 +1600,16 @@ The default (i.e. `JOIN` == `INNER JOIN`). This is `customers AND orders` with a
 In MySQL 5.x, it was often more performant to use a `GROUP BY` aggregation, but the optimizer now (usually) returns the same results for both. It's important to measure the relative performance of having the database peform your filtering vs. having your application do so. Be mindful of the performance impact to other tenants (other queries for the database, and other Kubernetes pods for the application) in both scenarios, as well as the user experience.
 
 ```sql
-mysql>
 SELECT DISTINCT
   company,
   job_title,
   ship_name
 FROM
-  customers
-  JOIN orders ON customers.id = orders.customer_id;
+  northwind.customers
+  JOIN northwind.orders ON customers.id = orders.customer_id;
+```
 
+```sql
 +------------+---------------------------+-------------------------+
 | company    | job_title                 | ship_name               |
 +------------+---------------------------+-------------------------+
@@ -1293,13 +1632,21 @@ FROM
 15 rows in set (0.02 sec)
 ```
 
+<details>
+<summary>What would it look like without DISTINCT?</summary>
+
+  
+</details>
+
 #### Left Outer Join
 
 Left and Right Joins are both a type of Outer Join, and often just called Left or Right Join. This is `customers OR orders` with a predicate and default value (`NULL`) for `orders`.
 
 ```sql
-mysql>
 SELECT DISTINCT
+```
+
+```sql
   company,
   job_title,
   ship_name
@@ -1427,8 +1774,10 @@ FROM
 It's worth noting here that thus far, we've avoided using specifying the table for a given column, because the columns have been unique. If there were multiple tables with a given column (e.g. `id`), we'd have to specify it. This is done by prefixing the column name with the table name, e.g. `suppliers.job_title`. Note that you can also alias a table name by immediately following it with the desired alias, e.g. `FROM suppliers s`, and the alias can then be used to specify the table for a given column.
 
 ```sql
-mysql>
 SELECT
+```
+
+```sql
   CONCAT_WS(', ', last_name, first_name) AS name,
   job_title
 FROM
@@ -1461,8 +1810,10 @@ FROM
 The above query isn't tremendously useful, of course, since it ambiguously names the first column `name` without specifying which table it's pulling from, and it removes duplicates (which in this case, would be the additional employes who share a job title). If a true join between these two was desired, and it was desired that the data was being presented in a way that makes visual sense to the reader, something like this would be preferable.
 
 ```sql
-mysql>
 SELECT
+```
+
+```sql
   CONCAT_WS(', ', s.last_name, s.first_name) AS supplier_name,
   s.job_title,
   CONCAT_WS(', ', e.last_name, e.first_name) AS employee_name
@@ -1511,7 +1862,10 @@ Indices aren't free, however - when you create an index on a column, that column
 We'll again look at the `test` schema, this time, the `ref_users` table. This table has 1 million rows, and was created by taking a [list of names](https://github.com/dominictarr/random-name/blob/master/names.txt) with 21985 rows, generating the schema with a program (as an aside, I got to play with C, which is always fun and frustrating), then loading it into the table. Since the table is two orders of magnitude larger than the input, there are obviously duplicated names, including some duplicated tuples of `first_name, last_name`. My table has nearly two orders of magnitude more duplicates than could be expected from a uniform distribution (962 duplicate tuples vs. the expected 45), which means my future as a statistician isn't great.
 
 ```sql
-mysql> USE test;
+USE test;
+```
+
+```sql
 Database changed
 
 mysql> SELECT * FROM ref_users WHERE last_name = 'Safko';
@@ -1532,7 +1886,10 @@ mysql> SELECT * FROM ref_users WHERE last_name = 'Safko';
 `last_name` doesn't have an index. Let's create one on `first_name` and repeat the search (since the names were randomly distributed from the same list, a given first name has the same probability as being a last name). First, we create the index, which takes some time since the column's entries must be written out to a B+ tree. Next, we run `ANALYZE TABLE` to ensure that MySQL's optimizer is aware of the key distribution.
 
 ```sql
-mysql> CREATE INDEX first_name ON ref_users (first_name);
+CREATE INDEX first_name ON ref_users (first_name);
+```
+
+```sql
 Query OK, 0 rows affected (36.93 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 
@@ -1546,7 +1903,10 @@ mysql> ANALYZE TABLE ref_users;
 ```
 
 ```sql
-mysql> SELECT * FROM ref_users WHERE first_name = 'Safko';
+SELECT * FROM ref_users WHERE first_name = 'Safko';
+```
+
+```sql
 +--------+------------+-------------+---------+
 | id     | first_name | last_name   | user_id |
 +--------+------------+-------------+---------+
@@ -1568,8 +1928,10 @@ The lookup is now essentially instantaneous. If this is a frequently performed q
 JSON has its own special requirements to be indexed, mostly if you're storing strings. First, you must select a specific part of the column's rows to be the indexed key, known as a functional key part. Additionally, the key has to have a prefix length assigned to it, but functional key parts don't allow that. Finally if you `CAST(foo) AS CHAR(n)` the selected part so the index is stored properly, the returned string has the `utf8mb4_0900_ai_ci` collation, but `JSON_UNQUOTE()` (which is done implicitly as part of selecting a part of a row to be indexed) has the `utf8mb4_bin` collation. The easiest workaround is to specify the latter's collation as part of the index creation. Also, this requires the stored data to be `k:v` objects, rather than arrays.
 
 ```sql
-mysql>
 CREATE INDEX owned_idx ON zaps (
+```
+
+```sql
   (
     CAST(
       used_by ->> "$.user_id" AS CHAR(16)
@@ -1583,8 +1945,10 @@ Records: 0  Duplicates: 0  Warnings: 0
 Alternatively, if the key you want to index can be cast to an `int`, you can use generated columns to accomplish this; you can even (as of MySQL 8.0.23) make them invisible so they don't show up for normal queries:
 
 ```sql
-mysql>
 ALTER TABLE
+```
+
+```sql
   zaps
 ADD
   COLUMN used_by_idx_col BIGINT UNSIGNED GENERATED ALWAYS AS (
@@ -1603,7 +1967,10 @@ Records: 0  Duplicates: 0  Warnings: 0
 This creates an invisible column `used_by_idx_col` which automatically generates a value based on the key `user_id` in the column `used_by`, casting it to an `UNSIGNED BIGINT`. The column is invisible unless specified:
 
 ```sql
-mysql> SELECT * FROM zaps\G
+SELECT * FROM zaps\G
+```
+
+```sql
 *************************** 1. row ***************************
              id: 1
          zap_id: 1
@@ -1630,7 +1997,10 @@ used_by_idx_col: 42
 An index can also be created across multiple columns - for InnoDB, up to 16.
 
 ```sql
-mysql> CREATE INDEX full_name ON ref_users (first_name, last_name);
+CREATE INDEX full_name ON ref_users (first_name, last_name);
+```
+
+```sql
 Query OK, 0 rows affected (40.09 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 ```
@@ -1638,8 +2008,10 @@ Records: 0  Duplicates: 0  Warnings: 0
 First, we'll use `IGNORE INDEX` to direct SQL to ignore the index we just created. This query counts the duplicate name tuples. Since the `id` is being included, and `GROUPing` it would result in an empty set (as it's the primary key, and thus guaranteed to be unique), `ANY VALUE` must be specified to let MySQL know that the result can be non-deterministic. Finally, `EXPLAIN ANALYZE` is being used to run the query, and explain what it's doing. This differs from `EXPLAIN`, which guesses at what would be done, but doesn't actually perform the query. Be careful using `EXPLAIN ANALYZE`, especially with destructive actions, since those queries will actually be performed!
 
 ```sql
-mysql>
 EXPLAIN ANALYZE
+```
+
+```sql
 SELECT
   ANY_VALUE(id),
   first_name,
@@ -1667,8 +2039,10 @@ The query took 19.58 seconds, and resulted in 962 rows. The output is read from 
 If you're curious, `actual time` is in milliseconds, and consists of two timings - the first is the time to initiate the step and return the first row; the second is the time to initiate the step and return all rows. `cost` is an arbitrary number indicating what the query cost optimizer thinks the query costs to perform, and is meaningless.
 
 ```sql
-mysql>
 EXPLAIN ANALYZE
+```
+
+```sql
 SELECT
   ANY_VALUE(id),
   first_name,
@@ -1695,8 +2069,10 @@ With the index in place, an index scan is performed instead of two table scans, 
 Another example, retreiving a specific doubled tuple that I know exists:
 
 ```sql
-mysql>
 SELECT
+```
+
+```sql
   *
 FROM
   ref_users USE INDEX()
@@ -1719,8 +2095,10 @@ Note that `USE INDEX()` is valid syntax to tell MySQL to ignore all indexes.
 If instead, either the `full_name` or `first_name` index is ignored on its own, its complement will be used, and they're effectively equally fast due to the filtered result set (although as shown, the query ignoring the `full_name` index is an order of magnitude slower):
 
 ```sql
-mysql>
 EXPLAIN ANALYZE
+```
+
+```sql
 SELECT
   *
 FROM
@@ -1758,7 +2136,10 @@ EXPLAIN: -> Index lookup on ref_users using full_name (first_name='Zoltai', last
 MySQL 8 added the ability to toggle an index on and off, without actually dropping it. This way, if you want to test whether or not an index is helpful, you can toggle it off, observe query performance, and then decide whether or not to leave it.
 
 ```sql
-mysql> ALTER TABLE ref_users ALTER INDEX first_name INVISIBLE;
+ALTER TABLE ref_users ALTER INDEX first_name INVISIBLE;
+```
+
+```sql
 Query OK, 0 rows affected (0.28 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 ```
@@ -1768,7 +2149,10 @@ Records: 0  Duplicates: 0  Warnings: 0
 By default, indices are sorted in ascending order. While they can still be used when reversed, it's not as fast (although the performance difference may be minimal - test your theory before committing to it). If you are frequently querying something with `ORDER BY <row> DESC`, it may be helpful to instead create an index in descending order.
 
 ```sql
-mysql> CREATE INDEX first_desc ON ref_users (first_name DESC);
+CREATE INDEX first_desc ON ref_users (first_name DESC);
+```
+
+```sql
 Query OK, 0 rows affected (41.18 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 ```
@@ -1787,8 +2171,10 @@ for tuple_i in table_1:
 This has `O(MN)` time complexity, where `M` and `N` are the number of tuples in each table. If there's an index, the 2nd loop is using it for the lookup rather than another table scan, which makes the time complexity `O(Mlog(N))`, but with large sizes this is still quite bad. Here is an example on two tables with one million rows each:
 
 ```sql
-mysql>
 EXPLAIN ANALYZE
+```
+
+```sql
 SELECT
   full_name
 FROM
@@ -1818,8 +2204,10 @@ While this looks very similar, there are details I've glossed over about the par
 MySQL [added a hash join in 8.0.18](https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/), but it comes with some limitations; chiefly that a table must fit into memory, and annoyingly, that the optimizer will often decide to use a nested loop if indexes exist. If it can be used, though, compare the difference:
 
 ```sql
-mysql>
 EXPLAIN ANALYZE
+```
+
+```sql
 SELECT
   full_name
 FROM
@@ -1840,7 +2228,10 @@ EXPLAIN: -> Inner hash join (ref_users.user_id = zaps.owned_by)  (cost=989919772
 For these, we'll shift back to the `northwind` schema.
 
 ```sql
-mysql> USE northwind;
+USE northwind;
+```
+
+```sql
 Database changed
 ```
 
@@ -1849,8 +2240,10 @@ Database changed
 `WHERE` is the easiest to understand and apply, and will cover most of your needs.
 
 ```sql
-mysql>
 SELECT
+```
+
+```sql
   id,
   CONCAT_WS(', ', last_name, first_name) AS name,
   city,
@@ -1872,8 +2265,10 @@ WHERE
 You may also have seen or used the wildcard `%` with `LIKE` and `NOT LIKE`.
 
 ```sql
-mysql>
 SELECT
+```
+
+```sql
   id,
   CONCAT_WS(', ', last_name, first_name) AS name,
   city,
@@ -1895,8 +2290,10 @@ WHERE
 These two are functionally equivalent queries. However, if there is an index on the predicate column, and you use a leading wildcard (e.g. `LIKE '%attle'`), MySQL cannot use the index, and will instead perform a table scan. If you can avoid using leading wildcards on large tables, do so. It's also worth noting that there are many times when the query optimizer determines that the table scan would be faster than using an index, and so will do so anyway. [Index usage can be hinted](https://dev.mysql.com/doc/refman/8.0/en/index-hints.html), forced, and ignored, although as of MySQL 8.0.20, the old syntax (which included hints) [is deprecated](https://dev.mysql.com/doc/refman/8.0/en/optimizer-hints.html#optimizer-hints-index-level). Examples of both are below with an `EXPLAIN SELECT`.
 
 ```sql
-mysql>
 EXPLAIN SELECT
+```
+
+```sql
   id,
   city,
   CONCAT_WS(', ', last_name, first_name) AS name,
@@ -1983,8 +2380,10 @@ possible_keys: city
 Earlier, we used `HAVING` in a `GROUP BY` aggregation. The difference between the two is that `WHERE` filters the results before they're sent to be aggregated, whereas `HAVING` filters the aggregation, and thus predicates relying on the aggregation result can be used. It's not limited to only aggregation results, though - a common use case is to allow the use of aliases or subquery results in filtering. Be aware that it's generally more performant to use `WHERE` if possible (consider re-writing your query if it isn't).
 
 ```sql
-mysql>
 SELECT
+```
+
+```sql
   c.first_name,
   c.last_name,
   c.city,
@@ -2009,8 +2408,10 @@ ERROR 1054 (42S22): Unknown column 'order_status' in 'where clause'
 The desired output here is to produce the name and city of any customer who has a job title starting with `Purchasing` and has placed a new order. Since the `order_status` column is the result of a subquery (returning the text name of a given order status ID), it can't be filtered with `WHERE`.
 
 ```sql
-mysql>
 SELECT
+```
+
+```sql
   c.first_name,
   c.last_name,
   c.city,
@@ -2052,8 +2453,10 @@ HAVING
 This is somewhat of a contrived example, since it's not necessary to return the actual `order_status` text at. However, if desired, it can be simplified with another `JOIN` instead of `HAVING`:
 
 ```sql
-mysql>
 SELECT
+```
+
+```sql
   c.first_name,
   c.last_name,
   c.city,
@@ -2175,8 +2578,10 @@ EXPLAIN: -> Index scan on ref_users using full_name  (cost=100495.40 rows=996699
 Since the the table includes columns not covered by the index (`user_id`), it would take longer to use the index and then find columns not in the index than to just do a table scan. Observe:
 
 ```sql
-mysql>
 EXPLAIN ANALYZE
+```
+
+```sql
 SELECT
   *
 FROM
@@ -2223,7 +2628,10 @@ mysql> SELECT * FROM ref_users LIMIT 500000,10;
 Doing this causes a table scan up to the specified offset. Far better, if you have a known monotonic number (like `id`), is to use a `WHERE` predicate (`WHERE` will be covered later in more detail):
 
 ```sql
-mysql> SELECT * FROM ref_users WHERE id > 500000 LIMIT 10;
+SELECT * FROM ref_users WHERE id > 500000 LIMIT 10;
+```
+
+```sql
 +--------+------------+-----------+---------+
 | id     | first_name | last_name | user_id |
 +--------+------------+-----------+---------+
@@ -2250,8 +2658,10 @@ Using `id` as the filter allows it to be used for an index range scan, which is 
 This also tends to be something that works well early on with little load, but as either the database or application grows, it becomes unwieldy.
 
 ```sql
-mysql>
 EXPLAIN ANALYZE
+```
+
+```sql
 SELECT
   first_name,
   last_name
@@ -2279,8 +2689,10 @@ EXPLAIN: -> Group (no aggregates)  (actual time=0.429..9110.455 rows=999037 loop
 Bear in mind that the above was using an index scan! If there isn't a covering index available, this is the `DISTINCT` result:
 
 ```sql
-mysql>
 EXPLAIN ANALYZE
+```
+
+```sql
 SELECT DISTINCT
   first_name,
   last_name
@@ -2300,6 +2712,9 @@ EXPLAIN: -> Table scan on <temporary>  (actual time=0.015..694.662 rows=999037 l
 This isn't something you'll do often, if at all, so may as well do so now, eh?
 
 ```sql
-mysql> DROP SCHEMA foo;
+DROP SCHEMA foo;
+```
+
+```sql
 Query OK, 0 rows affected (0.05 sec)
 ```
