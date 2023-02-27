@@ -1,64 +1,66 @@
-<!-- vim-markdown-toc GFM -->
-
-* [Prerequisites](#prerequisites)
-* [Introduction](#introduction)
-  * [What is SQL?](#what-is-sql)
-  * [What is a relational database?](#what-is-a-relational-database)
-  * [What is ACID?](#what-is-acid)
-    * [What is MySQL?](#what-is-mysql)
-      * [How is it pronounced?](#how-is-it-pronounced)
-  * [Basic definitions](#basic-definitions)
-    * [SQL sub-languages](#sql-sub-languages)
-    * [Other definitions](#other-definitions)
-* [MySQL Components](#mysql-components)
-* [MySQL Operations](#mysql-operations)
-  * [Assumptions](#assumptions)
-  * [Notes](#notes)
-  * [Schemata](#schemata)
-  * [Schema spelunking](#schema-spelunking)
-    * [String literals](#string-literals)
-      * [SQL_MODE](#sql_mode)
-    * [Create a schema](#create-a-schema)
-  * [Table operations](#table-operations)
-    * [Create tables](#create-tables)
-      * [Data types](#data-types)
-    * [Foreign keys](#foreign-keys)
-      * [Why you might want foreign keys](#why-you-might-want-foreign-keys)
-      * [Creating a foreign key](#creating-a-foreign-key)
-      * [Demonstrating a foreign key](#demonstrating-a-foreign-key)
-  * [Column operations](#column-operations)
-    * [Adding columns](#adding-columns)
-    * [Modfying columns](#modfying-columns)
-    * [Dropping columns](#dropping-columns)
-    * [Copied table definitions](#copied-table-definitions)
-      * [Copied table data and truncating](#copied-table-data-and-truncating)
-    * [Transactions](#transactions)
-    * [Generated columns](#generated-columns)
-    * [Invisible columns](#invisible-columns)
-  * [Queries](#queries)
-    * [SELECT](#select)
-    * [INSERT](#insert)
-    * [TABLE](#table)
-  * [Joins](#joins)
-    * [Relational alegbra](#relational-alegbra)
-    * [Types of joins](#types-of-joins)
-      * [Cross](#cross)
-      * [Inner Join](#inner-join)
-      * [Left Outer Join](#left-outer-join)
-      * [Right Outer Join](#right-outer-join)
-      * [Full Outer Join](#full-outer-join)
-    * [Specifying a column's table](#specifying-a-columns-table)
-    * [Indices](#indices)
-      * [Single indices](#single-indices)
-      * [JSON / Longtext](#json--longtext)
-      * [Composite indices](#composite-indices)
-      * [Testing indices](#testing-indices)
-      * [Descending indices](#descending-indices)
-      * [When indicies aren't helpful](#when-indicies-arent-helpful)
-    * [Predicates](#predicates)
-      * [WHERE](#where)
-
-<!-- vim-markdown-toc -->
+- [Prerequisites](#prerequisites)
+- [Introduction](#introduction)
+  - [What is SQL?](#what-is-sql)
+  - [What is a relational database?](#what-is-a-relational-database)
+  - [What is ACID?](#what-is-acid)
+    - [What is MySQL?](#what-is-mysql)
+      - [How is it pronounced?](#how-is-it-pronounced)
+  - [Basic definitions](#basic-definitions)
+    - [SQL sub-languages](#sql-sub-languages)
+    - [Other definitions](#other-definitions)
+- [MySQL Components](#mysql-components)
+- [MySQL Operations](#mysql-operations)
+  - [Assumptions](#assumptions)
+  - [Notes](#notes)
+  - [Schemata](#schemata)
+  - [Schema spelunking](#schema-spelunking)
+    - [String literals](#string-literals)
+      - [SQL\_MODE](#sql_mode)
+    - [Create a schema](#create-a-schema)
+  - [Table operations](#table-operations)
+    - [Create tables](#create-tables)
+      - [Data types](#data-types)
+    - [Foreign keys](#foreign-keys)
+      - [Why you might want foreign keys](#why-you-might-want-foreign-keys)
+      - [Creating a foreign key](#creating-a-foreign-key)
+      - [Demonstrating a foreign key](#demonstrating-a-foreign-key)
+  - [Column operations](#column-operations)
+    - [Adding columns](#adding-columns)
+    - [Modfying columns](#modfying-columns)
+    - [Dropping columns](#dropping-columns)
+    - [Copied table definitions](#copied-table-definitions)
+      - [Copied table data and truncating](#copied-table-data-and-truncating)
+    - [Transactions](#transactions)
+    - [Generated columns](#generated-columns)
+    - [Invisible columns](#invisible-columns)
+  - [Queries](#queries)
+    - [SELECT](#select)
+    - [INSERT](#insert)
+    - [TABLE](#table)
+  - [Joins](#joins)
+    - [Relational alegbra](#relational-alegbra)
+    - [Types of joins](#types-of-joins)
+      - [Cross](#cross)
+      - [Inner Join](#inner-join)
+      - [Left Outer Join](#left-outer-join)
+      - [Right Outer Join](#right-outer-join)
+      - [Full Outer Join](#full-outer-join)
+    - [Specifying a column's table](#specifying-a-columns-table)
+    - [Indices](#indices)
+      - [Single indices](#single-indices)
+      - [JSON / Longtext](#json--longtext)
+      - [Composite indices](#composite-indices)
+      - [Testing indices](#testing-indices)
+      - [Descending indices](#descending-indices)
+      - [When indicies aren't helpful](#when-indicies-arent-helpful)
+    - [Predicates](#predicates)
+      - [WHERE](#where)
+      - [HAVING](#having)
+  - [Query optimization](#query-optimization)
+    - [SELECT \*](#select-)
+    - [OFFSET / LIMIT](#offset--limit)
+    - [DISTINCT](#distinct)
+  - [Cleanup](#cleanup)
 
 # Prerequisites
 
@@ -118,14 +120,14 @@ Also, generally speaking, RDBMS are ACID-compliant (but not always).
 
 ACID is a set of four properties that, if implemented correctly, guarantee data validity:
 
-* Atomicity
-  * In a given transaction, each statement must either completely succeed, or fail. If any statement in a transaction fails, the entire transaction must fail.
-* Consistency
-  * A given transaction can only move a database from one valid and consistent state to another.
-* Isolation
-  * Even with concurrent transactions executing, the database must end up in the same state as if each transaction were executed sequentially.
-* Durability
-  * Once a transaction is committed, it must remain committed in the event of a system failure.
+- Atomicity
+  - In a given transaction, each statement must either completely succeed, or fail. If any statement in a transaction fails, the entire transaction must fail.
+- Consistency
+  - A given transaction can only move a database from one valid and consistent state to another.
+- Isolation
+  - Even with concurrent transactions executing, the database must end up in the same state as if each transaction were executed sequentially.
+- Durability
+  - Once a transaction is committed, it must remain committed in the event of a system failure.
 
 Note that the lack of one or more of these properties does not necessarily mean that data committed is invalid, only that the guarantees granted by that particular property must be accounted for elsewhere. A common counter-example of this is Eventual Consistency with distributed systems.
 
@@ -143,32 +145,32 @@ Officially, "My Ess Que Ell," but since the SQL language was originally called S
 
 All of these can be grouped as SQL, and some of them can also be combined - `DQL` is often merged with `DML`, for example. Knowing that `DML` is generally operating on a single record at a time (but may be batched), and that `DDL` is generally operating on an entire table or schema at a time suffices for now.
 
-* DCL
-  * Data Control Language. `GRANT`, `REVOKE`.
-* DDL
-  * Data Definition Language. `ALTER`, `CREATE`, `DROP`, `TRUNCATE`.
-* DML
-  * Data Manipulation Language. `CALL`, `DELETE`, `INSERT`, `LOCK`, `SELECT (with FROM or WHERE)`, `UPDATE`.
-* DQL
-  * Data Query Language. `SELECT`.
-* TCL
-  * Transaction Control Language. `COMMIT`, `ROLLBACK`, `SAVEPOINT`.
+- DCL
+  - Data Control Language. `GRANT`, `REVOKE`.
+- DDL
+  - Data Definition Language. `ALTER`, `CREATE`, `DROP`, `TRUNCATE`.
+- DML
+  - Data Manipulation Language. `CALL`, `DELETE`, `INSERT`, `LOCK`, `SELECT (with FROM or WHERE)`, `UPDATE`.
+- DQL
+  - Data Query Language. `SELECT`.
+- TCL
+  - Transaction Control Language. `COMMIT`, `ROLLBACK`, `SAVEPOINT`.
 
 ### Other definitions
 
-* B+ tree
-  * An _m_`-ary tree` data structure that is self-balancing, with a variable number of children per node. It differs from the `B-tree` in that an individual data node can have either keys or children, but not both. It has `O(log(n))` time complexity for insertion, search, and deletion. It is frequently used both for filesystems and for RDBMS.
-* Block
-  * The lowest reasonable level of data storage (above individual bits). Historically sized at 512 bytes due to hard drive sector sizes, but generally sized at 4 KiB in modern drives, and SSDs. Enterprise drives sometimes have 520 byte block sizes (or 4160 bytes for the 4 KiB-adjacent size), with the extra 8 bytes being used for data integrity calculations.
-* Filesystem
-  * A method for the operating system to store data. May include features like copy-on-write, encryption, journaling, pre-allocation, SSD management, volume management, and more. Modern examples include APFS (default for Apple products), ext4 (default for most Linux distributions), NTFS (default for Windows), XFS (default for Red Hat and its downstream), and ZFS (default for FreeBSD).
-* Schema
-  * A logical grouping of database objects, e.g. tables, indices, etc. Often called a database, but technically, the database may contain any number of schemas, each with its own unique (or shared!) set of data, access policies, etc.
-* Table
-  * A logical grouping of data, of varying or similar types. May contain constraints, indices, etc.
-* Tablespace
-  * The link between the logical storage layer (tables, indices) and the physical storage layer (the disk's filesystem). This is an actual file that exists on the disk, contained in `$MYSQL_DATA_DIR`, nominally `/var/lib/mysql`.
-    * As an aside, this fact, combined with [RDS MySQL file size limits](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/MySQL.KnownIssuesAndLimitations.html#MySQL.Concepts.Limits.FileSize) yields some interesting information about RDS. Since they used to (anything created before April 2014) limit a table to 2 TiB*, that means that they were using ext3, as that is its maximum file size. Instances created after April 2014 are limited to 16 TiB* files, indicating that they are probably now using ext4, as that is generally its maximum file size. 16 TB is also the limit for InnoDB with 4 KB InnoDB page sizes, so it's possible the underlying disk's filesystem is XFS or something else, but since that value defaults to 16 KB, it seems unlikely.
+- B+ tree
+  - An _m_`-ary tree` data structure that is self-balancing, with a variable number of children per node. It differs from the `B-tree` in that an individual data node can have either keys or children, but not both. It has `O(log(n))` time complexity for insertion, search, and deletion. It is frequently used both for filesystems and for RDBMS.
+- Block
+  - The lowest reasonable level of data storage (above individual bits). Historically sized at 512 bytes due to hard drive sector sizes, but generally sized at 4 KiB in modern drives, and SSDs. Enterprise drives sometimes have 520 byte block sizes (or 4160 bytes for the 4 KiB-adjacent size), with the extra 8 bytes being used for data integrity calculations.
+- Filesystem
+  - A method for the operating system to store data. May include features like copy-on-write, encryption, journaling, pre-allocation, SSD management, volume management, and more. Modern examples include APFS (default for Apple products), ext4 (default for most Linux distributions), NTFS (default for Windows), XFS (default for Red Hat and its downstream), and ZFS (default for FreeBSD).
+- Schema
+  - A logical grouping of database objects, e.g. tables, indices, etc. Often called a database, but technically, the database may contain any number of schemas, each with its own unique (or shared!) set of data, access policies, etc.
+- Table
+  - A logical grouping of data, of varying or similar types. May contain constraints, indices, etc.
+- Tablespace
+  - The link between the logical storage layer (tables, indices) and the physical storage layer (the disk's filesystem). This is an actual file that exists on the disk, contained in `$MYSQL_DATA_DIR`, nominally `/var/lib/mysql`.
+    - As an aside, this fact, combined with [RDS MySQL file size limits](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/MySQL.KnownIssuesAndLimitations.html#MySQL.Concepts.Limits.FileSize) yields some interesting information about RDS. Since they used to (anything created before April 2014) limit a table to 2 TiB*, that means that they were using ext3, as that is its maximum file size. Instances created after April 2014 are limited to 16 TiB* files, indicating that they are probably now using ext4, as that is generally its maximum file size. 16 TB is also the limit for InnoDB with 4 KB InnoDB page sizes, so it's possible the underlying disk's filesystem is XFS or something else, but since that value defaults to 16 KB, it seems unlikely.
 
 \* AWS' docs state that the limits are in TB (terabytes) instead of TiB (tebibytes). It's possible that their VM subsystem limits the size to n TB, but the actual filesystem is capable of n TiB.
 
@@ -733,7 +735,6 @@ TABLE zaps;
 
 <details>
   <summary>What is `TABLE`?</summary>
-
 
   Syntactic sugar (a shortcut) for `SELECT * FROM <table>`.
 
@@ -1376,7 +1377,7 @@ SELECT * FROM ref_zaps LIMIT 10 OFFSET 15;
 ```
 
 <details>
-<summary>Can you think of anything missing from this table? (HINT: SHOW CREATE TABLE)</summary>
+  <summary>Can you think of anything missing from this table? (HINT: SHOW CREATE TABLE)</summary>
 
   There's no foreign key linking `owned_by` to a given user! In fact, they're just randomly generated numbers, but there are pairings. Let's create a foreign key now:
   ```sql
@@ -1392,7 +1393,6 @@ SELECT * FROM ref_zaps LIMIT 10 OFFSET 15;
 ### INSERT
 
 [MySQL docs.](https://dev.mysql.com/doc/refman/8.0/en/insert.html)
-
 
 `INSERT` is used to insert rows into a table. There is also an `UPSERT` equivalent, with the `ON DUPLICATE KEY UPDATE` clause. With this, if an `INSERT` would cause a key collision with a `UNIQUE` index (explicit or implicit, e.g. `PRIMARY KEY`), then an `UPDATE` of that row occurs instead.
 
@@ -1564,7 +1564,6 @@ If you're intersted in exploring relational alegbra, [this application](https://
 #### Cross
 
 Before we demonstrate a cross join, you should have two small (very small, like < 10 rows) tables. You can either use what we learned earlier to create a new table from an existing one, or you can use any two of the following two tables: `northwind.orders_status`, `northwind.tax_status_name`, `test.ref_users_tiny`, `test.ref_users_zaps`. You can cross join across schemas if you'd like, although I can't promise the information will make any sense.
-
 
 Also called a Cartesian Join. This produces `n x m` rows for the two groups being joined. That said, every other join can be thought of as a cross join with a predicate. In fact, `CROSS JOIN`, `JOIN`, and `INNER JOIN` are actually syntactically equivalent in MySQL (not ANSI SQL!), but for readability, it's preferred to only use `CROSS JOIN` if you actually intend to use it.
 
