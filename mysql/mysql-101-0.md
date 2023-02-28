@@ -1390,6 +1390,136 @@ SELECT * FROM ref_zaps LIMIT 10 OFFSET 15;
   ```
 <details>
 
+#### Working with JSON
+
+Both JSON arrays and objects can be stored in JSON columns. Using them in queries isn't as straight-forward as other column types.
+
+##### Finding non-null arrays
+
+```sql
+SELECT *
+FROM
+  ref_zaps
+WHERE JSON_LENGTH(shared_with) > 0
+LIMIT 10;
+```
+
+```sql
++--------+----------+----------------------+---------------------+-----------------+
+| zap_id | owned_by | shared_with          | created_at          | last_updated_at |
++--------+----------+----------------------+---------------------+-----------------+
+|     20 |      297 | [529, 805, 541, 498] | 1997-07-11 15:05:07 | NULL            |
+|     40 |      312 | [395, 721, 397, 930] | 2016-11-15 03:42:41 | NULL            |
+|     60 |      469 | [261, 565, 326, 637] | 2011-09-21 11:40:22 | NULL            |
+|     80 |      505 | [753, 766, 812, 521] | 2001-07-04 15:28:08 | NULL            |
+|    100 |      459 | [884, 23, 163, 654]  | 2008-08-30 12:53:32 | NULL            |
+|    120 |      411 | [730, 484, 530, 449] | 2012-09-02 00:42:20 | NULL            |
+|    140 |      191 | [611, 798, 984, 583] | 2004-12-14 04:08:09 | NULL            |
+|    160 |      310 | [941, 353, 499, 668] | 2003-01-22 01:05:04 | NULL            |
+|    180 |      463 | [679, 639, 760, 784] | 2022-01-22 04:31:00 | NULL            |
+|    200 |       36 | [308, 955, 485, 298] | 2015-10-17 21:42:16 | NULL            |
++--------+----------+----------------------+---------------------+-----------------+
+10 rows in set (0.02 sec)
+```
+
+##### Checking for a value inside an array
+
+```sql
+SELECT
+  zap_id,
+  owned_by,
+  shared_with,
+  user_id,
+  full_name
+FROM ref_zaps
+JOIN
+  ref_users ON
+JSON_CONTAINS(shared_with, JSON_ARRAY(ref_users.user_id))
+LIMIT 10;
+```
+
+```sql
++--------+----------+---------------------+---------+--------------------+
+| zap_id | owned_by | shared_with         | user_id | full_name          |
++--------+----------+---------------------+---------+--------------------+
+|    240 |      697 | [3, 854, 486, 907]  |       3 | Gorlin, Alene      |
+|    100 |      459 | [884, 23, 163, 654] |      23 | Schnurr, Sissie    |
+|    700 |      947 | [28, 173, 33, 899]  |      28 | Russi, Bab         |
+|    560 |      869 | [258, 197, 724, 31] |      31 | Quince, Caryl      |
+|    700 |      947 | [28, 173, 33, 899]  |      33 | Langille, Tonya    |
+|    740 |      888 | [41, 221, 402, 301] |      41 | Kruter, Bonni      |
+|    460 |      566 | [45, 793, 553, 162] |      45 | Schuh, Gasparo     |
+|    940 |      211 | [497, 973, 323, 48] |      48 | Aylsworth, Steffen |
+|    260 |      861 | [313, 52, 334, 457] |      52 | Delwyn, Karoline   |
+|    420 |      667 | [524, 527, 948, 60] |      60 | Magen, Sherill     |
++--------+----------+---------------------+---------+--------------------+
+10 rows in set (0.88 sec)
+```
+
+##### Extracting scalars from an object
+
+```sql
+-- the ->> operator is shorthand for JSON_UNQUOTE(JSON_EXTRACT())
+SELECT
+  email,
+  user_json->>'$.e_key'
+FROM
+  gensql
+LIMIT 10;
+```
+
+```sql
++---------------------------------+-----------------------+
+| email                           | user_json->>'$.f_key' |
++---------------------------------+-----------------------+
+| theresita.urbanna@persuader.com | cough                 |
+| lutero.leveridge@batch.com      | occupy                |
+| marge.belier@railroad.com       | oblivious             |
+| blondy.burnley@comic.com        | removable             |
+| donelle.labors@amused.com       | okay                  |
+| staci.amalbena@carded.com       | chivalry              |
+| daren.lynus@blooper.com         | kindly                |
+| norton.platas@procurer.com      | clanking              |
+| crin.gombosi@prewar.com         | oncoming              |
+| mackenzie.youngran@abridge.com  | theater               |
++---------------------------------+-----------------------+
+10 rows in set (0.02 sec)
+```
+
+```sql
+-- the -> operator is shorthand for JSON_EXTRACT()
+-- arrays are 0-indexed, so this is a slice, like lst[1:3]
+SELECT
+  email,
+  user_json->'$.e_key.d_key[1 to 2]'
+FROM
+  gensql
+WHERE
+  user_json->>'$.e_key'
+IS NOT NULL
+LIMIT 10;
+```
+
+```sql
++--------------------------------+------------------------------------+
+| email                          | user_json->'$.e_key.d_key[1 to 2]' |
++--------------------------------+------------------------------------+
+| donelle.labors@amused.com      | ["idealness", "unplug"]            |
+| mackenzie.youngran@abridge.com | ["waffle", "scion"]                |
+| elset.kramer@tiny.com          | ["dimple", "manpower"]             |
+| theresita.faxen@plentiful.com  | ["appetizer", "huskiness"]         |
+| salomi.pasco@each.com          | ["tiptop", "unsnap"]               |
+| ashia.garate@varied.com        | ["bauble", "mayflower"]            |
+| jonathan.aulea@chastise.com    | ["senior", "silicon"]              |
+| gillan.mcnalley@slain.com      | ["provider", "gradient"]           |
+| madelon.harleigh@defiling.com  | ["evoke", "tidy"]                  |
+| dagny.iverson@entryway.com     | ["baton", "skillful"]              |
++--------------------------------+------------------------------------+
+10 rows in set (0.02 sec)
+```
+
+See [MySQL docs](https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html) for much more about JSON operations.
+
 ### INSERT
 
 [MySQL docs.](https://dev.mysql.com/doc/refman/8.0/en/insert.html)
@@ -1568,274 +1698,218 @@ Before we demonstrate a cross join, you should have two small (very small, like 
 Also called a Cartesian Join. This produces `n x m` rows for the two groups being joined. That said, every other join can be thought of as a cross join with a predicate. In fact, `CROSS JOIN`, `JOIN`, and `INNER JOIN` are actually syntactically equivalent in MySQL (not ANSI SQL!), but for readability, it's preferred to only use `CROSS JOIN` if you actually intend to use it.
 
 ```sql
-SELECT * FROM northwind.orders_status CROSS JOIN northwind.orders_tax_status;
+SELECT
+  z.zap_id,
+  u.user_id,
+  u.full_name
+FROM
+  ref_users_tiny u
+CROSS JOIN
+  ref_zaps_tiny z;
 ```
 
 ```sql
-+----+-------------+----+-----------------+
-| id | status_name | id | tax_status_name |
-+----+-------------+----+-----------------+
-|  0 | New         |  1 | Taxable         |
-|  0 | New         |  0 | Tax Exempt      |
-|  1 | Invoiced    |  1 | Taxable         |
-|  1 | Invoiced    |  0 | Tax Exempt      |
-|  2 | Shipped     |  1 | Taxable         |
-|  2 | Shipped     |  0 | Tax Exempt      |
-|  3 | Closed      |  1 | Taxable         |
-|  3 | Closed      |  0 | Tax Exempt      |
-+----+-------------+----+-----------------+
-8 rows in set (0.00 sec)
++--------+---------+-------------------+
+| zap_id | user_id | full_name         |
++--------+---------+-------------------+
+|      1 |       4 | McGrody, Cointon  |
+|      1 |       3 | Gorlin, Alene     |
+|      1 |       2 | Marienthal, Shirl |
+|      1 |       1 | Jemena, Wyatt     |
+|      2 |       4 | McGrody, Cointon  |
+|      2 |       3 | Gorlin, Alene     |
+|      2 |       2 | Marienthal, Shirl |
+|      2 |       1 | Jemena, Wyatt     |
+|      3 |       4 | McGrody, Cointon  |
+|      3 |       3 | Gorlin, Alene     |
+|      3 |       2 | Marienthal, Shirl |
+|      3 |       1 | Jemena, Wyatt     |
+|      4 |       4 | McGrody, Cointon  |
+|      4 |       3 | Gorlin, Alene     |
+|      4 |       2 | Marienthal, Shirl |
+|      4 |       1 | Jemena, Wyatt     |
++--------+---------+-------------------+
+16 rows in set (0.01 sec)
 ```
 
 #### Inner Join
 
-The default (i.e. `JOIN` == `INNER JOIN`). This is `customers AND orders` with a predicate. We're also using `DISTINCT` here to limit the returned values - it returns unique tuples of all queried columns.
-
-In MySQL 5.x, it was often more performant to use a `GROUP BY` aggregation, but the optimizer now (usually) returns the same results for both. It's important to measure the relative performance of having the database peform your filtering vs. having your application do so. Be mindful of the performance impact to other tenants (other queries for the database, and other Kubernetes pods for the application) in both scenarios, as well as the user experience.
+The default (i.e. `JOIN` == `INNER JOIN`). This is `users AND zaps` with a predicate.
 
 ```sql
-SELECT DISTINCT
-  company,
-  job_title,
-  ship_name
+SELECT
+  z.zap_id,
+  u.full_name,
+  u.city,
+  u.country
 FROM
-  northwind.customers
-  JOIN northwind.orders ON customers.id = orders.customer_id;
+  ref_users u
+JOIN
+  ref_zaps z
+ON
+  u.user_id = z.owned_by
+LIMIT 10;
 ```
 
 ```sql
-+------------+---------------------------+-------------------------+
-| company    | job_title                 | ship_name               |
-+------------+---------------------------+-------------------------+
-| Company AA | Purchasing Manager        | Karen Toh               |
-| Company D  | Purchasing Manager        | Christina Lee           |
-| Company L  | Purchasing Manager        | John Edwards            |
-| Company H  | Purchasing Representative | Elizabeth Andersen      |
-| Company CC | Purchasing Manager        | Soo Jung Lee            |
-| Company C  | Purchasing Representative | Thomas Axen             |
-| Company F  | Purchasing Manager        | Francisco Pérez-Olaeta  |
-| Company BB | Purchasing Manager        | Amritansh Raghav        |
-| Company J  | Purchasing Manager        | Roland Wacker           |
-| Company G  | Owner                     | Ming-Yang Xie           |
-| Company K  | Purchasing Manager        | Peter Krschne           |
-| Company A  | Owner                     | Anna Bedecs             |
-| Company I  | Purchasing Manager        | Sven Mortensen          |
-| Company Y  | Purchasing Manager        | John Rodman             |
-| Company Z  | Accounting Assistant      | Run Liu                 |
-+------------+---------------------------+-------------------------+
-15 rows in set (0.02 sec)
++--------+-------------------+--------------+--------------------+
+| zap_id | full_name         | city         | country            |
++--------+-------------------+--------------+--------------------+
+|    411 | Jemena, Wyatt     | Chhatarpur   | India              |
+|    794 | Marienthal, Shirl | Guayaramerin | Bolivia            |
+|    830 | McGrody, Cointon  | Guatemala    | Guatemala          |
+|    697 | Harriman, Neda    | Huimin       | China              |
+|    110 | Lauter, Lorelle   | Bereeda      | Somalia            |
+|    942 | Lauter, Lorelle   | Bereeda      | Somalia            |
+|    772 | Race, Marsha      | Matanzas     | Dominican Republic |
+|    676 | Craven, Elfreda   | NanTong      | China              |
+|    715 | Azral, Terese     | Askim        | Norway             |
+|    405 | Hepza, Dyanne     | Heerenveen   | Netherlands        |
++--------+-------------------+--------------+--------------------+
+10 rows in set (0.02 sec)
 ```
-
-<details>
-<summary>What would it look like without DISTINCT?</summary>
-
-
-</details>
 
 #### Left Outer Join
 
-Left and Right Joins are both a type of Outer Join, and often just called Left or Right Join. This is `customers OR orders` with a predicate and default value (`NULL`) for `orders`.
+Left and Right Joins are both a type of Outer Join, and often just called Left or Right Join. This is `users OR zaps` with a predicate and default value (`NULL`) for `zaps`.
 
 ```sql
-SELECT DISTINCT
-```
-
-```sql
-  company,
-  job_title,
-  ship_name
+SELECT
+  u.user_id,
+  u.full_name,
+  z.zap_id,
+  z.owned_by
 FROM
-  customers
-  LEFT JOIN orders ON customers.id = orders.customer_id;
-
-+------------+---------------------------+-------------------------+
-| company    | job_title                 | ship_name               |
-+------------+---------------------------+-------------------------+
-| Company A  | Owner                     | Anna Bedecs             |
-| Company B  | Owner                     | NULL                    |
-| Company C  | Purchasing Representative | Thomas Axen             |
-| Company D  | Purchasing Manager        | Christina Lee           |
-| Company E  | Owner                     | NULL                    |
-| Company F  | Purchasing Manager        | Francisco Pérez-Olaeta  |
-| Company G  | Owner                     | Ming-Yang Xie           |
-| Company H  | Purchasing Representative | Elizabeth Andersen      |
-| Company I  | Purchasing Manager        | Sven Mortensen          |
-| Company J  | Purchasing Manager        | Roland Wacker           |
-| Company K  | Purchasing Manager        | Peter Krschne           |
-| Company L  | Purchasing Manager        | John Edwards            |
-| Company M  | Purchasing Representative | NULL                    |
-| Company N  | Purchasing Representative | NULL                    |
-| Company O  | Purchasing Manager        | NULL                    |
-| Company P  | Purchasing Representative | NULL                    |
-| Company Q  | Owner                     | NULL                    |
-| Company R  | Purchasing Representative | NULL                    |
-| Company S  | Accounting Assistant      | NULL                    |
-| Company T  | Purchasing Manager        | NULL                    |
-| Company U  | Accounting Manager        | NULL                    |
-| Company V  | Purchasing Assistant      | NULL                    |
-| Company W  | Purchasing Manager        | NULL                    |
-| Company X  | Owner                     | NULL                    |
-| Company Y  | Purchasing Manager        | John Rodman             |
-| Company Z  | Accounting Assistant      | Run Liu                 |
-| Company AA | Purchasing Manager        | Karen Toh               |
-| Company BB | Purchasing Manager        | Amritansh Raghav        |
-| Company CC | Purchasing Manager        | Soo Jung Lee            |
-+------------+---------------------------+-------------------------+
-29 rows in set (0.00 sec)
+  ref_users u
+  LEFT JOIN ref_zaps_joins z ON u.user_id = z.owned_by
+LIMIT 10;
 ```
+
+```sql
++---------+-------------------+--------+----------+
+| user_id | full_name         | zap_id | owned_by |
++---------+-------------------+--------+----------+
+|       1 | Jemena, Wyatt     |    411 |        1 |
+|       2 | Marienthal, Shirl |    794 |        2 |
+|       3 | Gorlin, Alene     |   NULL |     NULL |
+|       4 | McGrody, Cointon  |    830 |        4 |
+|       5 | Harriman, Neda    |    697 |        5 |
+|       6 | Lauter, Lorelle   |    942 |        6 |
+|       6 | Lauter, Lorelle   |    110 |        6 |
+|       7 | Race, Marsha      |    772 |        7 |
+|       8 | Craven, Elfreda   |    676 |        8 |
+|       9 | Azral, Terese     |    715 |        9 |
++---------+-------------------+--------+----------+
+10 rows in set (0.05 sec)
+```
+
+Of course, we previously put a foreign key on `zaps.owned_by`, precisely to prevent this kind of thing from happening. Still, you can see how this kind of query could be useful.
 
 #### Right Outer Join
 
-Knowing how Left Join works, what do you think the results would be for a Right Join of the same data? What if the join order was reversed?
+This is the same thing, but with the tables reversed:
+
+```sql
+SELECT
+  u.user_id,
+  u.full_name,
+  z.zap_id,
+  z.owned_by
+FROM
+  ref_users u
+  RIGHT JOIN ref_zaps_joins z ON u.user_id = z.owned_by
+LIMIT 10;
+```
+
+```sql
++---------+--------------------+--------+----------+
+| user_id | full_name          | zap_id | owned_by |
++---------+--------------------+--------+----------+
+|     602 | Pruchno, Kariotta  |      1 |      602 |
+|     593 | Adall, Greta       |      2 |      593 |
+|    NULL | NULL               |      3 |        0 |
+|     548 | Creedon, Barbara   |      4 |      548 |
+|     957 | Laszlo, Alleyn     |      5 |      957 |
+|     777 | Kopaz, Meir        |      6 |      777 |
+|     648 | Gildea, Christophe |      7 |      648 |
+|     959 | Rigby, Cecile      |      8 |      959 |
+|     569 | Zobkiw, Freemon    |      9 |      569 |
+|     429 | Reinhart, Glynnis  |     10 |      429 |
++---------+--------------------+--------+----------+
+10 rows in set (0.02 sec)
+```
+
+You can translate any `LEFT JOIN` to a `RIGHT JOIN` simply by swapping the order of the tables being joined:
+
+```sql
+SELECT
+  u.user_id,
+  u.full_name,
+  z.zap_id,
+  z.owned_by
+FROM
+  ref_zaps_joins u
+  RIGHT JOIN ref_users u ON u.user_id = z.owned_by
+LIMIT 10;
+```
+
+```sql
++---------+-------------------+--------+----------+
+| user_id | full_name         | zap_id | owned_by |
++---------+-------------------+--------+----------+
+|       1 | Jemena, Wyatt     |    411 |        1 |
+|       2 | Marienthal, Shirl |    794 |        2 |
+|       3 | Gorlin, Alene     |   NULL |     NULL |
+|       4 | McGrody, Cointon  |    830 |        4 |
+|       5 | Harriman, Neda    |    697 |        5 |
+|       6 | Lauter, Lorelle   |    942 |        6 |
+|       6 | Lauter, Lorelle   |    110 |        6 |
+|       7 | Race, Marsha      |    772 |        7 |
+|       8 | Craven, Elfreda   |    676 |        8 |
+|       9 | Azral, Terese     |    715 |        9 |
++---------+-------------------+--------+----------+
+10 rows in set (0.08 sec)
+```
 
 #### Full Outer Join
 
-This is `customers OR orders` with a predicate and default value (`NULL`) for both tables. MySQL doesn't support `FULL JOIN` as a keyword, but it can be performed using `UNION` (or `UNION ALL` if duplicates are desired). In order to give meaningful information, we'll join three tables here.
+This is `users OR zaps` with a predicate and default value (`NULL`) for both tables. MySQL doesn't support `FULL JOIN` as a keyword, but it can be performed using `UNION` (or `UNION ALL` if duplicates are desired).
+
+NOTE: This query will produce 1150 rows as written.
 
 ```sql
-SELECT DISTINCT
-  company,
-  job_title,
-  ship_name
+SELECT
+  u.user_id,
+  u.full_name,
+  z.zap_id,
+  z.owned_by
 FROM
-  customers
-  LEFT JOIN orders ON customers.id = orders.customer_id
-UNION
-SELECT DISTINCT
-  company,
-  job_title,
-  ship_name
+  ref_users u
+  LEFT JOIN ref_zaps_joins z ON u.user_id = z.owned_by
+UNION ALL
+SELECT
+  u.user_id,
+  u.full_name,
+  z.zap_id,
+  z.owned_by
 FROM
-  orders
-  RIGHT JOIN shippers ON orders.shipper_id = shippers.id;
-
-+--------------------+---------------------------+-------------------------+
-| company            | job_title                 | ship_name               |
-+--------------------+---------------------------+-------------------------+
-| Company A          | Owner                     | Anna Bedecs             |
-| Company B          | Owner                     | NULL                    |
-| Company C          | Purchasing Representative | Thomas Axen             |
-| Company D          | Purchasing Manager        | Christina Lee           |
-| Company E          | Owner                     | NULL                    |
-| Company F          | Purchasing Manager        | Francisco Pérez-Olaeta  |
-| Company G          | Owner                     | Ming-Yang Xie           |
-| Company H          | Purchasing Representative | Elizabeth Andersen      |
-| Company I          | Purchasing Manager        | Sven Mortensen          |
-| Company J          | Purchasing Manager        | Roland Wacker           |
-| Company K          | Purchasing Manager        | Peter Krschne           |
-| Company L          | Purchasing Manager        | John Edwards            |
-| Company M          | Purchasing Representative | NULL                    |
-| Company N          | Purchasing Representative | NULL                    |
-| Company O          | Purchasing Manager        | NULL                    |
-| Company P          | Purchasing Representative | NULL                    |
-| Company Q          | Owner                     | NULL                    |
-| Company R          | Purchasing Representative | NULL                    |
-| Company S          | Accounting Assistant      | NULL                    |
-| Company T          | Purchasing Manager        | NULL                    |
-| Company U          | Accounting Manager        | NULL                    |
-| Company V          | Purchasing Assistant      | NULL                    |
-| Company W          | Purchasing Manager        | NULL                    |
-| Company X          | Owner                     | NULL                    |
-| Company Y          | Purchasing Manager        | John Rodman             |
-| Company Z          | Accounting Assistant      | Run Liu                 |
-| Company AA         | Purchasing Manager        | Karen Toh               |
-| Company BB         | Purchasing Manager        | Amritansh Raghav        |
-| Company CC         | Purchasing Manager        | Soo Jung Lee            |
-| Shipping Company A | NULL                      | Christina Lee           |
-| Shipping Company A | NULL                      | Roland Wacker           |
-| Shipping Company A | NULL                      | Sven Mortensen          |
-| Shipping Company A | NULL                      | John Rodman             |
-| Shipping Company B | NULL                      | Karen Toh               |
-| Shipping Company B | NULL                      | John Edwards            |
-| Shipping Company B | NULL                      | Soo Jung Lee            |
-| Shipping Company B | NULL                      | Thomas Axen             |
-| Shipping Company B | NULL                      | Francisco Pérez-Olaeta  |
-| Shipping Company B | NULL                      | Roland Wacker           |
-| Shipping Company B | NULL                      | Elizabeth Andersen      |
-| Shipping Company C | NULL                      | Elizabeth Andersen      |
-| Shipping Company C | NULL                      | Christina Lee           |
-| Shipping Company C | NULL                      | Amritansh Raghav        |
-| Shipping Company C | NULL                      | Peter Krschne           |
-| Shipping Company C | NULL                      | Run Liu                 |
-| Shipping Company C | NULL                      | Francisco Pérez-Olaeta  |
-| Shipping Company C | NULL                      | Anna Bedecs             |
-+--------------------+---------------------------+-------------------------+
-47 rows in set (0.02 sec)
+  ref_users u
+  RIGHT JOIN ref_zaps_joins z ON u.user_id = z.owned_by
+WHERE
+  u.user_id IS NULL;
 ```
+
+To efficiently see what it's doing, you can run two queries, appending `ORDER BY -user_id DESC` and `ORDER BY user_id`, which represents the top and bottom of the result.
+
+<details>
+  <summary>What is -user_id?</summary>
+
+  It's shorthand for the math expression `(0 - user_id)`, which effectively is the same thing as `ORDER BY ... ASC`, but it places `NULL` values last. Postgres avoids this weird trick and just has the `NULLS {FIRST, LAST}` option for ordering.
+</details>
 
 ### Specifying a column's table
 
-It's worth noting here that thus far, we've avoided using specifying the table for a given column, because the columns have been unique. If there were multiple tables with a given column (e.g. `id`), we'd have to specify it. This is done by prefixing the column name with the table name, e.g. `suppliers.job_title`. Note that you can also alias a table name by immediately following it with the desired alias, e.g. `FROM suppliers s`, and the alias can then be used to specify the table for a given column.
-
-```sql
-SELECT
-  CONCAT_WS(', ', last_name, first_name) AS name,
-  job_title
-FROM
-  suppliers
-  JOIN employees ON job_title = job_title;
-ERROR 1052 (23000): Column 'last_name' in field list is ambiguous
-
-mysql>
-SELECT DISTINCT
-  CONCAT_WS(', ', s.last_name, s.first_name) AS name,
-  s.job_title
-FROM
-  suppliers s
-  JOIN employees e ON s.job_title = e.job_title;
-
-+-----------------------------+----------------------+
-| name                        | job_title            |
-+-----------------------------+----------------------+
-| Andersen, Elizabeth A.      | Sales Manager        |
-| Weiler, Cornelia            | Sales Manager        |
-| Kelley, Madeleine           | Sales Representative |
-| Hernandez-Echevarria, Amaya | Sales Manager        |
-| Dunton, Bryn Paul           | Sales Representative |
-| Sandberg, Mikael            | Sales Manager        |
-| Sousa, Luis                 | Sales Manager        |
-+-----------------------------+----------------------+
-7 rows in set (0.00 sec)
-```
-
-The above query isn't tremendously useful, of course, since it ambiguously names the first column `name` without specifying which table it's pulling from, and it removes duplicates (which in this case, would be the additional employes who share a job title). If a true join between these two was desired, and it was desired that the data was being presented in a way that makes visual sense to the reader, something like this would be preferable.
-
-```sql
-SELECT
-  CONCAT_WS(', ', s.last_name, s.first_name) AS supplier_name,
-  s.job_title,
-  CONCAT_WS(', ', e.last_name, e.first_name) AS employee_name
-FROM
-  suppliers s
-  JOIN employees e ON s.job_title = e.job_title;
-```
-
-```sql
-+-----------------------------+----------------------+----------------------+
-| supplier_name               | job_title            | employee_name        |
-+-----------------------------+----------------------+----------------------+
-| Andersen, Elizabeth A.      | Sales Manager        | Thorpe, Steven       |
-| Weiler, Cornelia            | Sales Manager        | Thorpe, Steven       |
-| Kelley, Madeleine           | Sales Representative | Hellung-Larsen, Anne |
-| Kelley, Madeleine           | Sales Representative | Zare, Robert         |
-| Kelley, Madeleine           | Sales Representative | Neipper, Michael     |
-| Kelley, Madeleine           | Sales Representative | Sergienko, Mariya    |
-| Kelley, Madeleine           | Sales Representative | Kotas, Jan           |
-| Kelley, Madeleine           | Sales Representative | Freehafer, Nancy     |
-| Hernandez-Echevarria, Amaya | Sales Manager        | Thorpe, Steven       |
-| Dunton, Bryn Paul           | Sales Representative | Hellung-Larsen, Anne |
-| Dunton, Bryn Paul           | Sales Representative | Zare, Robert         |
-| Dunton, Bryn Paul           | Sales Representative | Neipper, Michael     |
-| Dunton, Bryn Paul           | Sales Representative | Sergienko, Mariya    |
-| Dunton, Bryn Paul           | Sales Representative | Kotas, Jan           |
-| Dunton, Bryn Paul           | Sales Representative | Freehafer, Nancy     |
-| Sandberg, Mikael            | Sales Manager        | Thorpe, Steven       |
-| Sousa, Luis                 | Sales Manager        | Thorpe, Steven       |
-+-----------------------------+----------------------+----------------------+
-17 rows in set (0.00 sec)
-```
-
-When data is being returned to an application, the ordering of columns or their names don't matter very much, but it's a good idea to at least be aware of how to present data in different ways.
+You may have noticed that we've used aliases for many tables, e.g. `ref_users u`, and then notating columns with that alias as a prefix, e.g. `u.user_id`. This is not required for single tables, of course, nor is it requires with joins if every column name is unique. However, it's considered a good practice.
 
 ### Indices
 
@@ -1843,89 +1917,109 @@ Indices, or indexes, _may_ speed up queries. Each table **should** have a primar
 
 Indices aren't free, however - when you create an index on a column, that column's values are copied to the aforementioned B+ tree. While disk space is relatively cheap, creating dozens of indices for columns that are infrequently queried should be avoided. Also, since `INSERTs` must also write to the index, they'll be slowed down somewhat. Finally, InnoDB limits a given table to a maximum of 64 secondary indices (that is, other than primary keys).
 
+<details>
+<summary>Obscure facts about tables without primary keys</summary>
+
 \* Prior to MySQL 8.0.30, if you don't create a primary key, the first `UNIQUE NOT NULL` index created is automatically promoted to become the primary key. If you don't have one of those either, the table will have no primary key†. Starting with MySQL 8.0.30, if no primary key is declared, an invisible column will be created called `my_row_id` and set to be the primary key.
 
 † Not entirely true. A hidden index named `GEN_CLUST_INDEX` is created on an invisible (but a special kind of invisible, that you can never view) column named `ROW_ID` containing row IDs, but it's a monotonically increasing index that's shared globally across the entire database, not just that schema. Don't make InnoDB do this.
+</details>
 
 #### Single indices
 
-We'll again look at the `test` schema, this time, the `ref_users` table. This table has 1 million rows, and was created by taking a [list of names](https://github.com/dominictarr/random-name/blob/master/names.txt) with 21985 rows, generating the schema with a program (as an aside, I got to play with C, which is always fun and frustrating), then loading it into the table. Since the table is two orders of magnitude larger than the input, there are obviously duplicated names, including some duplicated tuples of `first_name, last_name`. My table has nearly two orders of magnitude more duplicates than could be expected from a uniform distribution (962 duplicate tuples vs. the expected 45), which means my future as a statistician isn't great.
+Here, we'll switch over to `%_big` tables, which have 1,000,000 rows each.
 
 ```sql
-USE test;
+SELECT
+  user_id,
+  full_name,
+  city,
+  country
+FROM
+  ref_users_big
+WHERE
+  last_name = 'Safko';
 ```
 
 ```sql
-Database changed
++---------+------------------+------------------------+----------------+
+| user_id | full_name        | city                   | country        |
++---------+------------------+------------------------+----------------+
+|   66826 | Safko, Elwyn     | Arad                   | Romania        |
+|   68759 | Safko, Vance     | Saint-Jérôme           | Canada         |
+|   81384 | Safko, Robinett  | Hornchurch             | United Kingdom |
+|   92580 | Safko, Daisi     | Sherwood Park          | Canada         |
+|  121219 | Safko, Karalee   | Miami Gardens          | United States  |
+|  124408 | Safko, Kyrstin   | Hawick                 | United Kingdom |
+|  150615 | Safko, Kleon     | Leigh                  | United Kingdom |
+|  151266 | Safko, Elita     | Abag Qi                | China          |
+|  155926 | Safko, Berthe    | Tullebølle             | Denmark        |
+|  168897 | Safko, Hazlett   | Valletta               | Malta          |
+|   ...   |     ...          |         ...            |      ...       |
+|  900935 | Safko, Tommy     | Paris                  | France         |
+|  925514 | Safko, Rancell   | Nampa                  | United States  |
+|  928486 | Safko, Garry     | Bardhaman              | India          |
+|  932457 | Safko, Desiree   | Kherson                | Ukraine        |
+|  945316 | Safko, Courtnay  | Saint Marys            | Canada         |
+|  947072 | Safko, Leonie    | Durango                | Mexico         |
+|  948263 | Safko, Jarred    | Las Vegas              | United States  |
+|  959464 | Safko, Gordie    | Madison                | United States  |
+|  972002 | Safko, Adriena   | Ubud                   | Indonesia      |
+|  982089 | Safko, Gan       | Milpitas               | United States  |
++---------+------------------+------------------------+----------------+
+76 rows in set (12.24 sec)
+```
+
+Let's create an index on the last name.
+
+```sql
+CREATE INDEX last_name ON ref_users_big (last_name);
 ```
 
 ```sql
-SELECT * FROM ref_users WHERE last_name = 'Safko';
-+--------+------------+-----------+---------+
-| id     | first_name | last_name | user_id |
-+--------+------------+-----------+---------+
-|  17862 | Coleen     | Safko     |   17862 |
-|  23768 | Schiro     | Safko     |   23768 |
-|  30136 | Aspasia    | Safko     |   30136 |
-| ...... | .......... | ......... | ....... |
-| 923109 | Toy        | Safko     |  923109 |
-| 951230 | Brittne    | Safko     |  951230 |
-| 952186 | Tran       | Safko     |  952186 |
-+--------+------------+-----------+---------+
-50 rows in set (6.73 sec)
-```
-
-`last_name` doesn't have an index. Let's create one on `first_name` and repeat the search (since the names were randomly distributed from the same list, a given first name has the same probability as being a last name). First, we create the index, which takes some time since the column's entries must be written out to a B+ tree. Next, we run `ANALYZE TABLE` to ensure that MySQL's optimizer is aware of the key distribution.
-
-```sql
-CREATE INDEX first_name ON ref_users (first_name);
-```
-
-```sql
-Query OK, 0 rows affected (36.93 sec)
+Query OK, 0 rows affected (45.08 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 ```
 
 ```sql
-ANALYZE TABLE ref_users;
-+----------------+---------+----------+----------+
-| Table          | Op      | Msg_type | Msg_text |
-+----------------+---------+----------+----------+
-| test.ref_users | analyze | status   | OK       |
-+----------------+---------+----------+----------+
-1 row in set (0.11 sec)
+SELECT * FROM ref_users_big WHERE last_name = 'Safko';
 ```
 
 ```sql
-SELECT * FROM ref_users WHERE first_name = 'Safko';
+-- the same results as above
+76 rows in set (0.04 sec)
+```
+
+The lookup is now essentially instantaneous. If this is a frequently performed query, this may be a wise decision. There are also times when you may not need an index - for example, remember that a `UNIQUE` constraint is also an index. Since all of our users in this table have an email address which is `first.last@domain.com`, you might be tempted to add a predicate of `WHERE email LIKE '%safko%'` instead of adding an index, but alas - leading wildcards disallow the use of indexes, so it requires a full table scan.
+
+#### Partial indices
+
+You can also create an index on a prefix of a column for string types (`CHAR`, `VARCHAR`, etc.), and for `TEXT` and `BLOB` columns you must do this.
+
+This will create an index on the first 3 characters of last_name:
+
+```sql
+ALTER TABLE ref_users_big DROP INDEX user_name;
+CREATE INDEX user_name ON ref_users_big (last_name(3));
 ```
 
 ```sql
-+--------+------------+-------------+---------+
-| id     | first_name | last_name   | user_id |
-+--------+------------+-------------+---------+
-|  25136 | Safko      | Juanita     |   25136 |
-| 101574 | Safko      | Lundquist   |  101574 |
-| 125275 | Safko      | Harolda     |  125275 |
-| ...... | .......... | ........... | ....... |
-| 988638 | Safko      | Christoffer |  988638 |
-| 991054 | Safko      | Pump        |  991054 |
-| 999043 | Safko      | Phillip     |  999043 |
-+--------+------------+-------------+---------+
-40 rows in set (0.01 sec)
+Query OK, 0 rows affected (0.31 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+
+Query OK, 0 rows affected (37.85 sec)
+Records: 0  Duplicates: 0  Warnings: 0
 ```
 
-The lookup is now essentially instantaneous. If this is a frequently performed query, this may be a wise decision. There are also times when you may not need an index - for example, remember that a `UNIQUE` constraint is also an index! Since `user_id` has a `UNIQUE` constraint on it, lookups via it are just as fast as by `id`. Whether or not you need a separate integer column as a key is a valid debate - in this case, simply using `user_id` as as the primary key would be reasonable.
+Speed for the new query is slower than before (0.16 seconds vs. 0.04 seconds), as expected, but 160 milliseconds for hashing three characters honestly isn't that bad. If you have tremendously large tables, limited disk space, or are worried about the write performance impact, this may be a good option for you.
 
 #### JSON / Longtext
 
 JSON has its own special requirements to be indexed, mostly if you're storing strings. First, you must select a specific part of the column's rows to be the indexed key, known as a functional key part. Additionally, the key has to have a prefix length assigned to it, but functional key parts don't allow that. Finally if you `CAST(foo) AS CHAR(n)` the selected part so the index is stored properly, the returned string has the `utf8mb4_0900_ai_ci` collation, but `JSON_UNQUOTE()` (which is done implicitly as part of selecting a part of a row to be indexed) has the `utf8mb4_bin` collation. The easiest workaround is to specify the latter's collation as part of the index creation. Also, this requires the stored data to be `k:v` objects, rather than arrays.
 
-```sql
-CREATE INDEX owned_idx ON zaps (
-```
 
 ```sql
+CREATE INDEX owned_idx ON zaps (
   (
     CAST(
       used_by ->> "$.user_id" AS CHAR(16)
@@ -2013,9 +2107,6 @@ First, we'll use `IGNORE INDEX` to direct SQL to ignore the index we just create
 
 ```sql
 EXPLAIN ANALYZE
-```
-
-```sql
 SELECT
   ANY_VALUE(id),
   first_name,
@@ -2046,9 +2137,6 @@ If you're curious, `actual time` is in milliseconds, and consists of two timings
 
 ```sql
 EXPLAIN ANALYZE
-```
-
-```sql
 SELECT
   ANY_VALUE(id),
   first_name,
@@ -2103,9 +2191,6 @@ If instead, either the `full_name` or `first_name` index is ignored on its own, 
 
 ```sql
 EXPLAIN ANALYZE
-```
-
-```sql
 SELECT
   *
 FROM
@@ -2242,16 +2327,6 @@ EXPLAIN: -> Inner hash join (ref_users.user_id = zaps.owned_by)  (cost=989919772
 ```
 
 ### Predicates
-
-For these, we'll shift back to the `northwind` schema.
-
-```sql
-USE northwind;
-```
-
-```sql
-Database changed
-```
 
 #### WHERE
 
