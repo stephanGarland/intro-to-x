@@ -1,52 +1,57 @@
 # MySQL 101 Part I
 
-<!-- vim-markdown-toc GFM -->
-
-  * [Prerequisites](#prerequisites)
-    * [MySQL Client](#mysql-client)
-      * [GUI](#gui)
-      * [TUI](#tui)
-  * [Introduction](#introduction)
-  * [What is SQL?](#what-is-sql)
-  * [What is a relational database?](#what-is-a-relational-database)
-  * [What is ACID?](#what-is-acid)
-    * [What is MySQL?](#what-is-mysql)
-      * [How is it pronounced?](#how-is-it-pronounced)
-  * [Basic definitions](#basic-definitions)
-    * [SQL sub-languages](#sql-sub-languages)
-    * [Other definitions](#other-definitions)
-* [MySQL Components](#mysql-components)
-* [MySQL Operations](#mysql-operations)
-  * [Assumptions](#assumptions)
-  * [Notes](#notes)
-  * [Schemata](#schemata)
-  * [Schema spelunking](#schema-spelunking)
-    * [String literals](#string-literals)
-      * [SQL_MODE](#sql_mode)
-    * [Create a schema](#create-a-schema)
-  * [Table operations](#table-operations)
-    * [Create tables](#create-tables)
-      * [Data types](#data-types)
-    * [Foreign keys](#foreign-keys)
-      * [Why you might want foreign keys](#why-you-might-want-foreign-keys)
-      * [Creating a foreign key](#creating-a-foreign-key)
-      * [Demonstrating a foreign key](#demonstrating-a-foreign-key)
-    * [Determining table size](#determining-table-size)
-  * [Column operations](#column-operations)
-    * [Adding columns](#adding-columns)
-    * [Modfying columns](#modfying-columns)
-    * [Dropping columns](#dropping-columns)
-    * [Copied table definitions](#copied-table-definitions)
-      * [Copied table data and truncating](#copied-table-data-and-truncating)
-    * [Transactions](#transactions)
-    * [Generated columns](#generated-columns)
-    * [Invisible columns](#invisible-columns)
-  * [Queries](#queries)
-    * [Predicates](#predicates)
-      * [WHERE](#where)
-
-<!-- vim-markdown-toc -->
 ## Prerequisites
+
+- [MySQL 101 Part I](#mysql-101-part-i)
+  - [Prerequisites](#prerequisites)
+    - [MySQL Client](#mysql-client)
+      - [GUI](#gui)
+      - [TUI](#tui)
+  - [Introduction](#introduction)
+  - [What is SQL?](#what-is-sql)
+  - [What is a relational database?](#what-is-a-relational-database)
+  - [What is ACID?](#what-is-acid)
+    - [What is MySQL?](#what-is-mysql)
+      - [How is it pronounced?](#how-is-it-pronounced)
+  - [Basic definitions](#basic-definitions)
+    - [SQL sub-languages](#sql-sub-languages)
+    - [Other definitions](#other-definitions)
+- [MySQL Components](#mysql-components)
+- [MySQL Operations](#mysql-operations)
+  - [Assumptions](#assumptions)
+  - [Notes](#notes)
+  - [Schemata](#schemata)
+  - [Schema spelunking](#schema-spelunking)
+    - [String literals](#string-literals)
+      - [SQL\_MODE](#sql_mode)
+    - [Create a schema](#create-a-schema)
+  - [Table operations](#table-operations)
+    - [Create tables](#create-tables)
+      - [Data types](#data-types)
+    - [Foreign keys](#foreign-keys)
+      - [Why you might want foreign keys](#why-you-might-want-foreign-keys)
+      - [Creating a foreign key](#creating-a-foreign-key)
+      - [Demonstrating a foreign key](#demonstrating-a-foreign-key)
+    - [Determining table size](#determining-table-size)
+  - [Column operations](#column-operations)
+    - [Adding columns](#adding-columns)
+    - [Modfying columns](#modfying-columns)
+    - [Dropping tables with foreign keys](#dropping-tables-with-foreign-keys)
+    - [Copied table definitions](#copied-table-definitions)
+      - [Copied table data and truncating](#copied-table-data-and-truncating)
+    - [Transactions](#transactions)
+    - [Generated columns](#generated-columns)
+    - [Invisible columns](#invisible-columns)
+  - [Queries](#queries)
+    - [Predicates](#predicates)
+      - [WHERE](#where)
+    - [SELECT](#select)
+      - [Working with JSON](#working-with-json)
+        - [Finding non-null arrays](#finding-non-null-arrays)
+        - [Checking for a value inside an array](#checking-for-a-value-inside-an-array)
+        - [Extracting scalars from an object](#extracting-scalars-from-an-object)
+    - [INSERT](#insert)
+    - [TABLE](#table)
 
 ### MySQL Client
 
@@ -790,6 +795,9 @@ FROM
   users
 JOIN zaps ON
   users.user_id = zaps.owned_by\G
+```
+
+```sql
 *************************** 1. row ***************************
              id: 1
      first_name: Stephan
@@ -1060,7 +1068,7 @@ Query OK, 0 rows affected (0.09 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 ```
 
-### Dropping columns
+### Dropping tables with foreign keys
 
 If there are foreign keys relying on the column you're trying to drop, you will first need to either disable foreign key checks, or remove those checks before you can drop the column.
 
@@ -1597,7 +1605,7 @@ SELECT * FROM ref_zaps LIMIT 10 OFFSET 15;
   Query OK, 1000 rows affected (0.90 sec)
   Records: 1000  Duplicates: 0  Warnings: 0
   ```
-<details>
+</details>
 
 #### Working with JSON
 
