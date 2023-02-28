@@ -51,6 +51,8 @@
 
 You'll need to have a MySQL client. In no particular order, options are [DBeaver](https://dbeaver.io/) (GUI), [MySQL Workbench](https://www.mysql.com/products/workbench/) (GUI), [mysql-client](https://dev.mysql.com/doc/refman/8.0/en/mysql.html) (TUI), and others. Note that the server is currently using a self-signed TLS certificate, which some clients may complain about. MySQL Workbench and msyql-client are proven to work without issue. Also note that mysql-client is available via [Homebrew](https://formulae.brew.sh/formula/mysql-client), but it won't symlink by default, so you'll need to do something like `brew link --force mysql-client`.
 
+WARNING: MySQL Workbench may not work with M1/M2 (ARM) Macs.
+
 ## Introduction
 
 ## What is SQL?
@@ -489,6 +491,9 @@ CREATE TABLE users (
   last_name CHAR(64),
   uid BIGINT
 );
+```
+
+```sql
 Query OK, 0 rows affected (0.17 sec)
 ```
 
