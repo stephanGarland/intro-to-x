@@ -49,7 +49,24 @@
 
 ## Prerequisites
 
-You'll need to have a MySQL client. In no particular order, options are [DBeaver](https://dbeaver.io/) (GUI), [MySQL Workbench](https://www.mysql.com/products/workbench/) (GUI), [mysql-client](https://dev.mysql.com/doc/refman/8.0/en/mysql.html) (TUI), and others. Note that the server is currently using a self-signed TLS certificate, which some clients may complain about. MySQL Workbench and msyql-client are proven to work without issue. Also note that mysql-client is available via [Homebrew](https://formulae.brew.sh/formula/mysql-client), but it won't symlink by default, so you'll need to do something like `brew link --force mysql-client`.
+### MySQL Client
+
+You'll need to have a MySQL client. In order of preference, some options for GUI (graphical) and TUI (terminal) are:
+
+#### GUI
+
+- [Sequel Ace](https://sequel-ace.com/)
+  - Install from App Store, or with [Homebrew](https://brew.sh/): `HOMEBREW_NO_AUTO_UPDATE=1 brew install --cask sequel-ace`
+- [MySQL Workbench](https://www.mysql.com/products/workbench/)
+- [DBeaver](https://dbeaver.io/)
+
+#### TUI
+
+- [mysql-client](https://dev.mysql.com/doc/refman/8.0/en/mysql.html)
+  - Install with [Homebrew](https://brew.sh/): `HOMEBREW_NO_AUTO_UPDATE=1 brew install mysql-client`
+
+
+Note that the server is currently using a self-signed TLS certificate, which some clients may complain about. Sequel Ace, MySQL Workbench, and msyql-client are proven to work without issue. Also note that mysql-client is available via [Homebrew](https://formulae.brew.sh/formula/mysql-client), but it won't symlink by default, so you'll need to do something like `brew link --force mysql-client`.
 
 WARNING: MySQL Workbench may not work with M1/M2 (ARM) Macs.
 
@@ -192,25 +209,26 @@ As of MySQL 8.0, this is the official architecture drawing:
 
 ## Assumptions
 
-* All examples here are using MySQL 8.0.23, with the InnoDB engine.
-* All examples here are using the mysql-client TUI program, but others may work as well.
+- All examples here are using MySQL 8.0.23, with the InnoDB engine.
+- All examples here are using the mysql-client TUI program, but others may work as well.
 
 ## Notes
 
-* MySQL is case-insenitive for most, but not all operations. I'll use `UPPERCASE` to designate commands, and `lowercase` to desginate arguments and schema, table, and column names, but you're welcome to use all lowercase.
-* The `;` suffix to commands serves as both the command terminator, and specifies that the output format should be in an ASCII table.
-* The `\G` suffix to commands is an alternative terminator, and specifies that the output format should be in horizontal rows.
-* I'm formatting my queries with statements and clauses on the left, their arguments indented by two spaces, and any qualifiers on the same line, where possible.
-* This was developed on a Debian VM with 16 cores of a Xeon E5-2650 v2, 64 GiB of DDR3 RAM, and a working directory which is an NFS export over a 1GBe network, consisting of a ZFS RAIDZ2 array of spinning disks; ashift=12, blocksize=128K. Your times will vary, based mostly on the disk and RAM speed.
+- MySQL is case-insenitive for most, but not all operations. I'll use `UPPERCASE` to designate commands, and `lowercase` to desginate arguments and schema, table, and column names, but you're welcome to use all lowercase.
+- The `;` suffix to commands serves as both the command terminator, and specifies that the output should be in an ASCII table.
+- The `\G` suffix to commands is an alternative terminator, and specifies that the output should be in a vertical, non-tabular format.
+  - Not all clients support this. If you're using a GUI client like Sequel Ace, you can simply scroll the output window horizontally, or expand it to make it bigger.
+- I'm formatting my queries with statements and clauses on the left, their arguments indented by two spaces, and any qualifiers on the same line, where possible.
+- This was developed on a Debian VM with 16 cores of a Xeon E5-2650 v2, 64 GiB of DDR3 RAM, and a working directory which is an NFS export over a 1GBe network, consisting of a ZFS RAIDZ2 array of spinning disks; ashift=12, blocksize=128K. Your times will vary, based mostly on the disk and RAM speed.
 
 ## Schemata
 
 A brand-new installation of MySQL will typically have four schemata - `information_schema`, `mysql`, `performance_schema`, and `sys`.
 
-* `information_schema` contains information about the schema in the database. This includes columns, column types, indices, foreign keys, and tables.
-* `mysql` generally contains configuration and logs.
-* `sys` generally contains information about the SQL engine (InnoDB here), including currently executing processes, and query metrics.
-* `performance_schema` contains some specific performance information about the schema in the database, such as deadlocks, locks, memory consumption, mutexes, and threads.
+- `information_schema` contains information about the schema in the database. This includes columns, column types, indices, foreign keys, and tables.
+- `mysql` generally contains configuration and logs.
+- `sys` generally contains information about the SQL engine (InnoDB here), including currently executing processes, and query metrics.
+- `performance_schema` contains some specific performance information about the schema in the database, such as deadlocks, locks, memory consumption, mutexes, and threads.
 
 ## Schema spelunking
 
@@ -416,8 +434,13 @@ SET @@sql_mode = (SELECT CONCAT_WS(',', 'ANSI_QUOTES', (SELECT @@GLOBAL.sql_mode
 
 ```sql
 Query OK, 0 rows affected (0.01 sec)
+```
 
-mysql> SELECT @@sql_mode\G
+```
+SELECT @@sql_mode\G
+```
+
+```sql
 *************************** 1. row ***************************
 @@sql_mode: ANSI_QUOTES,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
 1 row in set (0.00 sec)
@@ -524,12 +547,22 @@ ALTER TABLE users MODIFY uid BIGINT NOT NULL UNIQUE;
 ```sql
 Query OK, 0 rows affected (0.27 sec)
 Records: 0  Duplicates: 0  Warnings: 0
+```
 
-mysql> ALTER TABLE users MODIFY id BIGINT AUTO_INCREMENT;
+```sql
+ALTER TABLE users MODIFY id BIGINT AUTO_INCREMENT;
+```
+
+```sql
 Query OK, 0 rows affected (0.34 sec)
 Records: 0  Duplicates: 0  Warnings: 0
+```
 
-mysql> SHOW COLUMNS FROM users;
+```sql
+SHOW COLUMNS FROM users;
+```
+
+```sql
 +------------+----------+------+-----+---------+----------------+
 | Field      | Type     | Null | Key | Default | Extra          |
 +------------+----------+------+-----+---------+----------------+
@@ -618,6 +651,9 @@ Since people in different cultures may have longer names than I'm used to, makin
 ALTER TABLE users
   MODIFY first_name VARCHAR(255),
   MODIFY last_name VARCHAR(255);
+```
+
+```sql
 Query OK, 0 rows affected (0.13 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 ```
@@ -655,6 +691,12 @@ Records: 0  Duplicates: 0  Warnings: 1
 ```
 
 A warning? Huh?
+
+<details>
+  <summary>I don't see any warnings!</summary>
+
+  Your client may not display warnings, in which case you can just follow along in this document.
+</details>
 
 ```sql
 SHOW WARNINGS\G
