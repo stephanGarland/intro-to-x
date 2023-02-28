@@ -1,5 +1,7 @@
-- [Prerequisites](#prerequisites)
-- [Introduction](#introduction)
+# MySQL 101 Part I
+- [MySQL 101 Part I](#mysql-101-part-i)
+  - [Prerequisites](#prerequisites)
+  - [Introduction](#introduction)
   - [What is SQL?](#what-is-sql)
   - [What is a relational database?](#what-is-a-relational-database)
   - [What is ACID?](#what-is-acid)
@@ -24,6 +26,7 @@
       - [Why you might want foreign keys](#why-you-might-want-foreign-keys)
       - [Creating a foreign key](#creating-a-foreign-key)
       - [Demonstrating a foreign key](#demonstrating-a-foreign-key)
+    - [Determing table size](#determing-table-size)
   - [Column operations](#column-operations)
     - [Adding columns](#adding-columns)
     - [Modfying columns](#modfying-columns)
@@ -34,39 +37,21 @@
     - [Generated columns](#generated-columns)
     - [Invisible columns](#invisible-columns)
   - [Queries](#queries)
-    - [SELECT](#select)
-    - [INSERT](#insert)
-    - [TABLE](#table)
-  - [Joins](#joins)
-    - [Relational alegbra](#relational-alegbra)
-    - [Types of joins](#types-of-joins)
-      - [Cross](#cross)
-      - [Inner Join](#inner-join)
-      - [Left Outer Join](#left-outer-join)
-      - [Right Outer Join](#right-outer-join)
-      - [Full Outer Join](#full-outer-join)
-    - [Specifying a column's table](#specifying-a-columns-table)
-    - [Indices](#indices)
-      - [Single indices](#single-indices)
-      - [JSON / Longtext](#json--longtext)
-      - [Composite indices](#composite-indices)
-      - [Testing indices](#testing-indices)
-      - [Descending indices](#descending-indices)
-      - [When indicies aren't helpful](#when-indicies-arent-helpful)
     - [Predicates](#predicates)
       - [WHERE](#where)
-      - [HAVING](#having)
-  - [Query optimization](#query-optimization)
-    - [SELECT \*](#select-)
-    - [OFFSET / LIMIT](#offset--limit)
-    - [DISTINCT](#distinct)
-  - [Cleanup](#cleanup)
+    - [SELECT](#select)
+      - [Working with JSON](#working-with-json)
+        - [Finding non-null arrays](#finding-non-null-arrays)
+        - [Checking for a value inside an array](#checking-for-a-value-inside-an-array)
+        - [Extracting scalars from an object](#extracting-scalars-from-an-object)
+    - [INSERT](#insert)
+    - [TABLE](#table)
 
-# Prerequisites
+## Prerequisites
 
 You'll need to have a MySQL client. In no particular order, options are [DBeaver](https://dbeaver.io/) (GUI), [MySQL Workbench](https://www.mysql.com/products/workbench/) (GUI), [mysql-client](https://dev.mysql.com/doc/refman/8.0/en/mysql.html) (TUI), and others. Note that the server is currently using a self-signed TLS certificate, which some clients may complain about. MySQL Workbench and msyql-client are proven to work without issue. Also note that mysql-client is available via [Homebrew](https://formulae.brew.sh/formula/mysql-client), but it won't symlink by default, so you'll need to do something like `brew link --force mysql-client`.
 
-# Introduction
+## Introduction
 
 ## What is SQL?
 
@@ -172,7 +157,14 @@ All of these can be grouped as SQL, and some of them can also be combined - `DQL
   - The link between the logical storage layer (tables, indices) and the physical storage layer (the disk's filesystem). This is an actual file that exists on the disk, contained in `$MYSQL_DATA_DIR`, nominally `/var/lib/mysql`.
     - As an aside, this fact, combined with [RDS MySQL file size limits](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/MySQL.KnownIssuesAndLimitations.html#MySQL.Concepts.Limits.FileSize) yields some interesting information about RDS. Since they used to (anything created before April 2014) limit a table to 2 TiB*, that means that they were using ext3, as that is its maximum file size. Instances created after April 2014 are limited to 16 TiB* files, indicating that they are probably now using ext4, as that is generally its maximum file size. 16 TB is also the limit for InnoDB with 4 KB InnoDB page sizes, so it's possible the underlying disk's filesystem is XFS or something else, but since that value defaults to 16 KB, it seems unlikely.
 
-\* AWS' docs state that the limits are in TB (terabytes) instead of TiB (tebibytes). It's possible that their VM subsystem limits the size to n TB, but the actual filesystem is capable of n TiB.
+<details>
+<summary>What's a TiB?</summary>
+
+  A TiB (or MiB, or GiB..) is how data is actually sized, in base-2. Written out, instead of Terabytes, it's Tebibytes, and is _2^40 bytes_ instead of _10^12 bytes_ (Terabytes are base-10). Base-10 caught on for storage marketing since the number is larger and thus sounds better, but in reality you're getting less. This is why a 1 TB hard drive shows up on your computer as having 931 GB - because it's actually 931 GiB, but it gets displayed as GB since GiB as a term never caught on.
+
+  In specific relation to this point, AWS' docs state that the limits are in TB (terabytes) instead of TiB (tebibytes). It's possible that their VM subsystem limits the size to n TB, but the actual filesystem is capable of n TiB.
+
+</details>
 
 # MySQL Components
 
@@ -478,7 +470,7 @@ Query OK, 1 row affected (0.02 sec)
 
 ### Create tables
 
-First, we'll select our new schema so we don't have to constantly specify it. I'll be using `test` here, but you should substitute whatever you created in the last step.
+First, we'll select our new schema so we don't have to constantly specify it. I'll be using `foo` here, but you should substitute whatever you created in the last step.
 
 ```sql
 USE foo;
@@ -602,19 +594,16 @@ What is the difference between a `VARCHAR` and a `CHAR`, and what is the integer
 Let's try adding a 65-byte string to a column with a strict 64-byte limit - this can be done with the `LPAD` function, which takes the form `LPAD(<string>, <padding>, <padding_character>).`
 
 ```sql
-INSERT INTO users (first_name, last_name, user_id)
+INSERT INTO users
+  (first_name, last_name, user_id)
+VALUES
+  ("Stephan",
+  (SELECT LPAD("Garland", 65, " ")),
+  1
+);
 ```
 
 ```sql
-VALUES
-  (
-    "Stephan",
-    (
-      SELECT
-        LPAD("Garland", 65, " ")
-    ),
-    1
-  );
 ERROR 1406 (22001): Data too long for column 'last_name' at row 1
 ```
 
@@ -710,9 +699,8 @@ These tables seem fine to start with, but the columns that we are implicitly des
 Let's create a user, and give them a Zap.
 
 ```sql
-INSERT INTO users (
-  first_name, last_name, user_id
-)
+INSERT INTO users
+  (first_name, last_name, user_id)
 VALUES
   ('Stephan', 'Garland', 1);
 ```
@@ -878,6 +866,107 @@ SELECT * FROM zaps;
 ```sql
 Empty set (0.00 sec)
 ```
+
+### Determing table size
+
+In order to find out how many rows are in a table, there are a few ways of doing so. InnoDB maintains information about tables in the `INFORMATION_SCHEMA.TABLES` table, including an estimate of row count. However, it's just that - an estimate. It can be made to be accurate if you use `ANALYZE TABLE`, but in production, you shouldn't do this (to be clear, it should be done, but carefully), since it places a table-wide read lock during the process. You can also use the query `SELECT COUNT(*)`, but that will perform a table scan (where the entire table is read sequentially, without indices), so it may have a performance impact on the database, as it's consuming a lot of available IOPS. Finally, assuming you have an auto-incrementing `id` field in the table, you can use `SELECT id FROM <table> ORDER BY id DESC LIMIT 1` to get the last incremented value. This is also an estimate, since it doesn't take any deletions into account (auto-increment is monotonic), but it's extremely fast.
+
+```sql
+SELECT table_name, table_rows
+FROM
+  information_schema.tables
+WHERE
+  table_schema = 'test';
+```
+
+```sql
++---------------+------------+
+| TABLE_NAME    | TABLE_ROWS |
++---------------+------------+
+| gensql        |       1000 |
+| ref_users     |       1000 |
+| ref_users_big |     992839 |
+| ref_zaps      |          0 |
+| ref_zaps_big  |          0 |
+| users         |       1000 |
+| zaps          |          0 |
++---------------+------------+
+7 rows in set (0.01 sec)
+```
+
+```sql
+ANALYZE TABLE ref_zaps; ANALYZE TABLE ref_zaps_big;
+```
+
+```sql
++---------------+---------+----------+----------+
+| Table         | Op      | Msg_type | Msg_text |
++---------------+---------+----------+----------+
+| test.ref_zaps | analyze | status   | OK       |
++---------------+---------+----------+----------+
+1 row in set (0.03 sec)
+
++-------------------+---------+----------+----------+
+| Table             | Op      | Msg_type | Msg_text |
++-------------------+---------+----------+----------+
+| test.ref_zaps_big | analyze | status   | OK       |
++-------------------+---------+----------+----------+
+1 row in set (0.05 sec)
+```
+
+```sql
+SELECT table_name, table_rows
+FROM
+  information_schema.tables
+WHERE table_schema = 'test';
+```
+
+```sql
++---------------+------------+
+| TABLE_NAME    | TABLE_ROWS |
++---------------+------------+
+| gensql        |       1000 |
+| ref_users     |       1000 |
+| ref_users_big |     992839 |
+| ref_zaps      |       1000 |
+| ref_zaps_big  |     997211 |
+| users         |       1000 |
+| zaps          |          0 |
++---------------+------------+
+7 rows in set (0.02 sec)
+```
+
+Actual row count:
+
+```sql
+SELECT
+  'ref_users_big' AS 'table_name',
+  COUNT(*) AS 'row_count'
+FROM
+  ref_users_big
+UNION
+SELECT
+  'ref_zaps_big',
+  COUNT(*)
+FROM
+  ref_zaps_big;
+```
+
+```sql
++---------------+-----------+
+| table_name    | row_count |
++---------------+-----------+
+| ref_users_big |   1000000 |
+| ref_zaps_big  |   1000000 |
++---------------+-----------+
+2 rows in set (2.42 sec)
+```
+
+<details>
+  <summary>What's a UNION?</summary>
+
+  A way to combine query results, regardless of any relation between tables or queries.
+</details>
 
 ## Column operations
 
@@ -1250,103 +1339,175 @@ Records: 0  Duplicates: 0  Warnings: 0
 
 ## Queries
 
-In order to find out how many rows are in each table, there are a few ways of doing so. InnoDB maintains information about tables in the `INFORMATION_SCHEMA.TABLES` table, including an estimate of row count. However, it's just that - an estimate. It can be made to be accurate if you use `ANALYZE TABLE`, but in production, you shouldn't do this (to be clear, it should be done, but carefully), since it places a table-wide read lock during the process. You can also use the query `SELECT COUNT(*)`, but that will perform a table scan (where the entire table is read sequentially, without indices), so it may have a performance impact on the database, as it's consuming a lot of available IOPS. Finally, assuming you have an auto-incrementing `id` field in the table, you can use `SELECT id FROM <table> ORDER BY id DESC LIMIT 1` to get the last incremented value. This is also an estimate, since it doesn't take any deletions into account (auto-increment is monotonic), but it's extremely fast.
+### Predicates
 
-```sql
-SELECT table_name, table_rows
-FROM
-  information_schema.tables
-WHERE table_schema = 'test';
-```
+A predicate is a function which asserts that something is true or false. You can think of it like a filter.
 
-```sql
-+---------------+------------+
-| TABLE_NAME    | TABLE_ROWS |
-+---------------+------------+
-| gensql        |       1000 |
-| ref_users     |       1000 |
-| ref_users_big |     992839 |
-| ref_zaps      |          0 |
-| ref_zaps_big  |          0 |
-| users         |       1000 |
-| zaps          |          0 |
-+---------------+------------+
-7 rows in set (0.01 sec)
-```
+#### WHERE
 
-```sql
-ANALYZE TABLE ref_zaps; ANALYZE TABLE ref_zaps_big;
-```
-
-```sql
-+---------------+---------+----------+----------+
-| Table         | Op      | Msg_type | Msg_text |
-+---------------+---------+----------+----------+
-| test.ref_zaps | analyze | status   | OK       |
-+---------------+---------+----------+----------+
-1 row in set (0.03 sec)
-
-+-------------------+---------+----------+----------+
-| Table             | Op      | Msg_type | Msg_text |
-+-------------------+---------+----------+----------+
-| test.ref_zaps_big | analyze | status   | OK       |
-+-------------------+---------+----------+----------+
-1 row in set (0.05 sec)
-```
-
-```sql
-SELECT table_name, table_rows
-FROM
-  information_schema.tables
-WHERE table_schema = 'test';
-```
-
-```sql
-+---------------+------------+
-| TABLE_NAME    | TABLE_ROWS |
-+---------------+------------+
-| gensql        |       1000 |
-| ref_users     |       1000 |
-| ref_users_big |     992839 |
-| ref_zaps      |       1000 |
-| ref_zaps_big  |     997211 |
-| users         |       1000 |
-| zaps          |          0 |
-+---------------+------------+
-7 rows in set (0.02 sec)
-```
-
-Actual row count:
+`WHERE` is the easiest to understand and apply, and will cover most of your needs.
 
 ```sql
 SELECT
-  'ref_users_big' AS 'table_name',
-  COUNT(*) AS 'row_count'
+  user_id, first_name, last_name
 FROM
-  ref_users_big
-UNION
-SELECT
-  'ref_zaps_big',
-  COUNT(*)
-FROM
-  ref_zaps_big;
+  users
+WHERE
+  country = 'Zimbabwe';
 ```
 
 ```sql
-+---------------+-----------+
-| table_name    | row_count |
-+---------------+-----------+
-| ref_users_big |   1000000 |
-| ref_zaps_big  |   1000000 |
-+---------------+-----------+
-2 rows in set (2.42 sec)
++---------+------------+-----------+
+| user_id | first_name | last_name |
++---------+------------+-----------+
+|     106 | Ivonne     | Barmen    |
+|    1149 | Myca       | Flieger   |
+|    2143 | Dallas     | Nimesh    |
+|    4401 | Jeana      | Naga      |
+|    4623 | Godiva     | Adal      |
+|    5582 | Lexie      | Fenwick   |
+|    5586 | Carrie     | Nich      |
+|    5793 | Marten     | Casady    |
+|    6072 | Feliza     | Culhert   |
+|    6467 | Wood       | O'Connor  |
+|    7093 | Miriam     | Galliett  |
+|    7669 | Cele       | Belden    |
+|    7675 | Araldo     | Hoes      |
+|    8106 | Imojean    | Beaudoin  |
+|    9438 | Sibby      | Luedtke   |
+|    9566 | Eb         | Cattima   |
+|    9606 | Alard      | Frodina   |
++---------+------------+-----------+
+17 rows in set (0.22 sec)
 ```
 
-<details>
-  <summary>What's a UNION?</summary>
+Note that we filtered the results with a predicate that wasn't even in the result set (`country`).
 
-  A way to combine query results, regardless of any relation between tables or queries.
-</details>
+You may also have seen or used the wildcard `%` with `LIKE` and `NOT LIKE`.
+
+```sql
+SELECT
+  user_id, first_name, last_name
+FROM
+  users
+WHERE
+  country
+LIKE 'Zim%';
+```
+
+```sql
++---------+------------+-----------+
+| user_id | first_name | last_name |
++---------+------------+-----------+
+|     106 | Ivonne     | Barmen    |
+|    1149 | Myca       | Flieger   |
+|    2143 | Dallas     | Nimesh    |
+|    4401 | Jeana      | Naga      |
+|    4623 | Godiva     | Adal      |
+|    5582 | Lexie      | Fenwick   |
+|    5586 | Carrie     | Nich      |
+|    5793 | Marten     | Casady    |
+|    6072 | Feliza     | Culhert   |
+|    6467 | Wood       | O'Connor  |
+|    7093 | Miriam     | Galliett  |
+|    7669 | Cele       | Belden    |
+|    7675 | Araldo     | Hoes      |
+|    8106 | Imojean    | Beaudoin  |
+|    9438 | Sibby      | Luedtke   |
+|    9566 | Eb         | Cattima   |
+|    9606 | Alard      | Frodina   |
++---------+------------+-----------+
+17 rows in set (0.22 sec)
+```
+
+These two are functionally equivalent queries. However, if there is an index on the predicate column, and you use a leading wildcard (e.g. `LIKE '%babwe'`), MySQL cannot use the index, and will instead perform a table scan. If you can avoid using leading wildcards on large tables, do so. It's also worth noting that there are many times when the query optimizer determines that the table scan would be faster than using an index, and so will do so anyway. [Index usage can be hinted](https://dev.mysql.com/doc/refman/8.0/en/index-hints.html), forced, and ignored, although as of MySQL 8.0.20, the old syntax (which included hints) [is deprecated](https://dev.mysql.com/doc/refman/8.0/en/optimizer-hints.html#optimizer-hints-index-level). Examples of both are below with an `EXPLAIN SELECT`. They're from a different schema and table, as I've already set up the index.
+
+```sql
+EXPLAIN SELECT
+  user_id, first_name, last_name
+FROM
+  test.ref_users
+USE INDEX (country)
+WHERE
+  country
+LIKE 'Zim%'\G
+```
+
+```sql
+*************************** 1. row ***************************
+           id: 1
+  select_type: SIMPLE
+        table: ref_users
+   partitions: NULL
+         type: range
+possible_keys: country
+          key: country
+      key_len: 1023
+          ref: NULL
+         rows: 3
+     filtered: 100.00
+        Extra: Using index condition
+1 row in set, 1 warning (0.01 sec)
+```
+
+```sql
+EXPLAIN SELECT
+  user_id, first_name, last_name
+FROM
+  test.ref_users
+FORCE INDEX (country)
+WHERE
+  country
+LIKE '%babwe'\G
+
+```sql
+*************************** 1. row ***************************
+           id: 1
+  select_type: SIMPLE
+        table: ref_users
+   partitions: NULL
+         type: ALL
+possible_keys: NULL
+          key: NULL
+      key_len: NULL
+          ref: NULL
+         rows: 1000
+     filtered: 11.11
+        Extra: Using where
+1 row in set, 1 warning (0.00 sec)
+```
+
+Even when using `FORCE INDEX`, it's not being used, because it can't.
+
+```sql
+EXPLAIN SELECT
+  user_id, first_name, last_name
+FROM
+  test.ref_users
+/*+ INDEX(ref_users country) */
+WHERE
+  country
+LIKE 'Zim%'\G
+```
+
+The new syntax, which looks like a C-style comment, requires both the table and column to be listed.
+
+```sql
+*************************** 1. row ***************************
+           id: 1
+  select_type: SIMPLE
+        table: customers
+   partitions: NULL
+         type: range
+possible_keys: city
+          key: city
+      key_len: 153
+          ref: NULL
+         rows: 2
+     filtered: 100.00
+        Extra: Using index condition
+1 row in set, 1 warning (0.00 sec)
+```
 
 ### SELECT
 
@@ -1674,1154 +1835,3 @@ last_updated_at: NULL
 10000 rows in set (0.48 sec)
 ```
 
-## Joins
-
-### Relational alegbra
-
-Not a lot of it, I promise; just what we need to discuss joins.
-
-* Union: `R ∪ S --- R OR S`
-  * Implemented in MySQL via the `UNION` keyword
-* Intersection: `R ∩ S --- R AND S`
-  * Implemented in MySQL via `INNER JOIN`, or in MySQL 8.0.31, the `INTERSECT` keyword
-* Difference: `R ≏ S --- R - S`
-  * Implemented in MySQL 8.0.31 via the `EXCEPT` keyword, and can be emulated using `UNION` and `NOT IN`
-
-If you're intersted in exploring relational alegbra, [this application](https://dbis-uibk.github.io/relax/calc/local/uibk/local/3) is quite useful to convert SQL to relational alegbra, and display the results.
-
-### Types of joins
-
-#### Cross
-
-Before we demonstrate a cross join, you should have two small (very small, like < 10 rows) tables. You can either use what we learned earlier to create a new table from an existing one, or you can use any two of the following two tables: `northwind.orders_status`, `northwind.tax_status_name`, `test.ref_users_tiny`, `test.ref_users_zaps`. You can cross join across schemas if you'd like, although I can't promise the information will make any sense.
-
-Also called a Cartesian Join. This produces `n x m` rows for the two groups being joined. That said, every other join can be thought of as a cross join with a predicate. In fact, `CROSS JOIN`, `JOIN`, and `INNER JOIN` are actually syntactically equivalent in MySQL (not ANSI SQL!), but for readability, it's preferred to only use `CROSS JOIN` if you actually intend to use it.
-
-```sql
-SELECT
-  z.zap_id,
-  u.user_id,
-  u.full_name
-FROM
-  ref_users_tiny u
-CROSS JOIN
-  ref_zaps_tiny z;
-```
-
-```sql
-+--------+---------+-------------------+
-| zap_id | user_id | full_name         |
-+--------+---------+-------------------+
-|      1 |       4 | McGrody, Cointon  |
-|      1 |       3 | Gorlin, Alene     |
-|      1 |       2 | Marienthal, Shirl |
-|      1 |       1 | Jemena, Wyatt     |
-|      2 |       4 | McGrody, Cointon  |
-|      2 |       3 | Gorlin, Alene     |
-|      2 |       2 | Marienthal, Shirl |
-|      2 |       1 | Jemena, Wyatt     |
-|      3 |       4 | McGrody, Cointon  |
-|      3 |       3 | Gorlin, Alene     |
-|      3 |       2 | Marienthal, Shirl |
-|      3 |       1 | Jemena, Wyatt     |
-|      4 |       4 | McGrody, Cointon  |
-|      4 |       3 | Gorlin, Alene     |
-|      4 |       2 | Marienthal, Shirl |
-|      4 |       1 | Jemena, Wyatt     |
-+--------+---------+-------------------+
-16 rows in set (0.01 sec)
-```
-
-#### Inner Join
-
-The default (i.e. `JOIN` == `INNER JOIN`). This is `users AND zaps` with a predicate.
-
-```sql
-SELECT
-  z.zap_id,
-  u.full_name,
-  u.city,
-  u.country
-FROM
-  ref_users u
-JOIN
-  ref_zaps z
-ON
-  u.user_id = z.owned_by
-LIMIT 10;
-```
-
-```sql
-+--------+-------------------+--------------+--------------------+
-| zap_id | full_name         | city         | country            |
-+--------+-------------------+--------------+--------------------+
-|    411 | Jemena, Wyatt     | Chhatarpur   | India              |
-|    794 | Marienthal, Shirl | Guayaramerin | Bolivia            |
-|    830 | McGrody, Cointon  | Guatemala    | Guatemala          |
-|    697 | Harriman, Neda    | Huimin       | China              |
-|    110 | Lauter, Lorelle   | Bereeda      | Somalia            |
-|    942 | Lauter, Lorelle   | Bereeda      | Somalia            |
-|    772 | Race, Marsha      | Matanzas     | Dominican Republic |
-|    676 | Craven, Elfreda   | NanTong      | China              |
-|    715 | Azral, Terese     | Askim        | Norway             |
-|    405 | Hepza, Dyanne     | Heerenveen   | Netherlands        |
-+--------+-------------------+--------------+--------------------+
-10 rows in set (0.02 sec)
-```
-
-#### Left Outer Join
-
-Left and Right Joins are both a type of Outer Join, and often just called Left or Right Join. This is `users OR zaps` with a predicate and default value (`NULL`) for `zaps`.
-
-```sql
-SELECT
-  u.user_id,
-  u.full_name,
-  z.zap_id,
-  z.owned_by
-FROM
-  ref_users u
-  LEFT JOIN ref_zaps_joins z ON u.user_id = z.owned_by
-LIMIT 10;
-```
-
-```sql
-+---------+-------------------+--------+----------+
-| user_id | full_name         | zap_id | owned_by |
-+---------+-------------------+--------+----------+
-|       1 | Jemena, Wyatt     |    411 |        1 |
-|       2 | Marienthal, Shirl |    794 |        2 |
-|       3 | Gorlin, Alene     |   NULL |     NULL |
-|       4 | McGrody, Cointon  |    830 |        4 |
-|       5 | Harriman, Neda    |    697 |        5 |
-|       6 | Lauter, Lorelle   |    942 |        6 |
-|       6 | Lauter, Lorelle   |    110 |        6 |
-|       7 | Race, Marsha      |    772 |        7 |
-|       8 | Craven, Elfreda   |    676 |        8 |
-|       9 | Azral, Terese     |    715 |        9 |
-+---------+-------------------+--------+----------+
-10 rows in set (0.05 sec)
-```
-
-Of course, we previously put a foreign key on `zaps.owned_by`, precisely to prevent this kind of thing from happening. Still, you can see how this kind of query could be useful.
-
-#### Right Outer Join
-
-This is the same thing, but with the tables reversed:
-
-```sql
-SELECT
-  u.user_id,
-  u.full_name,
-  z.zap_id,
-  z.owned_by
-FROM
-  ref_users u
-  RIGHT JOIN ref_zaps_joins z ON u.user_id = z.owned_by
-LIMIT 10;
-```
-
-```sql
-+---------+--------------------+--------+----------+
-| user_id | full_name          | zap_id | owned_by |
-+---------+--------------------+--------+----------+
-|     602 | Pruchno, Kariotta  |      1 |      602 |
-|     593 | Adall, Greta       |      2 |      593 |
-|    NULL | NULL               |      3 |        0 |
-|     548 | Creedon, Barbara   |      4 |      548 |
-|     957 | Laszlo, Alleyn     |      5 |      957 |
-|     777 | Kopaz, Meir        |      6 |      777 |
-|     648 | Gildea, Christophe |      7 |      648 |
-|     959 | Rigby, Cecile      |      8 |      959 |
-|     569 | Zobkiw, Freemon    |      9 |      569 |
-|     429 | Reinhart, Glynnis  |     10 |      429 |
-+---------+--------------------+--------+----------+
-10 rows in set (0.02 sec)
-```
-
-You can translate any `LEFT JOIN` to a `RIGHT JOIN` simply by swapping the order of the tables being joined:
-
-```sql
-SELECT
-  u.user_id,
-  u.full_name,
-  z.zap_id,
-  z.owned_by
-FROM
-  ref_zaps_joins u
-  RIGHT JOIN ref_users u ON u.user_id = z.owned_by
-LIMIT 10;
-```
-
-```sql
-+---------+-------------------+--------+----------+
-| user_id | full_name         | zap_id | owned_by |
-+---------+-------------------+--------+----------+
-|       1 | Jemena, Wyatt     |    411 |        1 |
-|       2 | Marienthal, Shirl |    794 |        2 |
-|       3 | Gorlin, Alene     |   NULL |     NULL |
-|       4 | McGrody, Cointon  |    830 |        4 |
-|       5 | Harriman, Neda    |    697 |        5 |
-|       6 | Lauter, Lorelle   |    942 |        6 |
-|       6 | Lauter, Lorelle   |    110 |        6 |
-|       7 | Race, Marsha      |    772 |        7 |
-|       8 | Craven, Elfreda   |    676 |        8 |
-|       9 | Azral, Terese     |    715 |        9 |
-+---------+-------------------+--------+----------+
-10 rows in set (0.08 sec)
-```
-
-#### Full Outer Join
-
-This is `users OR zaps` with a predicate and default value (`NULL`) for both tables. MySQL doesn't support `FULL JOIN` as a keyword, but it can be performed using `UNION` (or `UNION ALL` if duplicates are desired).
-
-NOTE: This query will produce 1150 rows as written.
-
-```sql
-SELECT
-  u.user_id,
-  u.full_name,
-  z.zap_id,
-  z.owned_by
-FROM
-  ref_users u
-  LEFT JOIN ref_zaps_joins z ON u.user_id = z.owned_by
-UNION ALL
-SELECT
-  u.user_id,
-  u.full_name,
-  z.zap_id,
-  z.owned_by
-FROM
-  ref_users u
-  RIGHT JOIN ref_zaps_joins z ON u.user_id = z.owned_by
-WHERE
-  u.user_id IS NULL;
-```
-
-To efficiently see what it's doing, you can run two queries, appending `ORDER BY -user_id DESC` and `ORDER BY user_id`, which represents the top and bottom of the result.
-
-<details>
-  <summary>What is -user_id?</summary>
-
-  It's shorthand for the math expression `(0 - user_id)`, which effectively is the same thing as `ORDER BY ... ASC`, but it places `NULL` values last. Postgres avoids this weird trick and just has the `NULLS {FIRST, LAST}` option for ordering.
-</details>
-
-### Specifying a column's table
-
-You may have noticed that we've used aliases for many tables, e.g. `ref_users u`, and then notating columns with that alias as a prefix, e.g. `u.user_id`. This is not required for single tables, of course, nor is it requires with joins if every column name is unique. However, it's considered a good practice.
-
-### Indices
-
-Indices, or indexes, _may_ speed up queries. Each table **should** have a primary key (it's not required*, but, please don't do this), which is one index. Additional indices, on single or multiple columns, may be created. Most of them are stored in [B+ trees](https://en.wikipedia.org/wiki/B%2B_tree), which are similar to [B-trees](https://en.wikipedia.org/wiki/B-tree).
-
-Indices aren't free, however - when you create an index on a column, that column's values are copied to the aforementioned B+ tree. While disk space is relatively cheap, creating dozens of indices for columns that are infrequently queried should be avoided. Also, since `INSERTs` must also write to the index, they'll be slowed down somewhat. Finally, InnoDB limits a given table to a maximum of 64 secondary indices (that is, other than primary keys).
-
-<details>
-<summary>Obscure facts about tables without primary keys</summary>
-
-\* Prior to MySQL 8.0.30, if you don't create a primary key, the first `UNIQUE NOT NULL` index created is automatically promoted to become the primary key. If you don't have one of those either, the table will have no primary key†. Starting with MySQL 8.0.30, if no primary key is declared, an invisible column will be created called `my_row_id` and set to be the primary key.
-
-† Not entirely true. A hidden index named `GEN_CLUST_INDEX` is created on an invisible (but a special kind of invisible, that you can never view) column named `ROW_ID` containing row IDs, but it's a monotonically increasing index that's shared globally across the entire database, not just that schema. Don't make InnoDB do this.
-</details>
-
-#### Single indices
-
-Here, we'll switch over to `%_big` tables, which have 1,000,000 rows each.
-
-```sql
-SELECT
-  user_id,
-  full_name,
-  city,
-  country
-FROM
-  ref_users_big
-WHERE
-  last_name = 'Safko';
-```
-
-```sql
-+---------+------------------+------------------------+----------------+
-| user_id | full_name        | city                   | country        |
-+---------+------------------+------------------------+----------------+
-|   66826 | Safko, Elwyn     | Arad                   | Romania        |
-|   68759 | Safko, Vance     | Saint-Jérôme           | Canada         |
-|   81384 | Safko, Robinett  | Hornchurch             | United Kingdom |
-|   92580 | Safko, Daisi     | Sherwood Park          | Canada         |
-|  121219 | Safko, Karalee   | Miami Gardens          | United States  |
-|  124408 | Safko, Kyrstin   | Hawick                 | United Kingdom |
-|  150615 | Safko, Kleon     | Leigh                  | United Kingdom |
-|  151266 | Safko, Elita     | Abag Qi                | China          |
-|  155926 | Safko, Berthe    | Tullebølle             | Denmark        |
-|  168897 | Safko, Hazlett   | Valletta               | Malta          |
-|   ...   |     ...          |         ...            |      ...       |
-|  900935 | Safko, Tommy     | Paris                  | France         |
-|  925514 | Safko, Rancell   | Nampa                  | United States  |
-|  928486 | Safko, Garry     | Bardhaman              | India          |
-|  932457 | Safko, Desiree   | Kherson                | Ukraine        |
-|  945316 | Safko, Courtnay  | Saint Marys            | Canada         |
-|  947072 | Safko, Leonie    | Durango                | Mexico         |
-|  948263 | Safko, Jarred    | Las Vegas              | United States  |
-|  959464 | Safko, Gordie    | Madison                | United States  |
-|  972002 | Safko, Adriena   | Ubud                   | Indonesia      |
-|  982089 | Safko, Gan       | Milpitas               | United States  |
-+---------+------------------+------------------------+----------------+
-76 rows in set (12.24 sec)
-```
-
-Let's create an index on the last name.
-
-```sql
-CREATE INDEX last_name ON ref_users_big (last_name);
-```
-
-```sql
-Query OK, 0 rows affected (45.08 sec)
-Records: 0  Duplicates: 0  Warnings: 0
-```
-
-```sql
-SELECT * FROM ref_users_big WHERE last_name = 'Safko';
-```
-
-```sql
--- the same results as above
-76 rows in set (0.04 sec)
-```
-
-The lookup is now essentially instantaneous. If this is a frequently performed query, this may be a wise decision. There are also times when you may not need an index - for example, remember that a `UNIQUE` constraint is also an index. Since all of our users in this table have an email address which is `first.last@domain.com`, you might be tempted to add a predicate of `WHERE email LIKE '%safko%'` instead of adding an index, but alas - leading wildcards disallow the use of indexes, so it requires a full table scan.
-
-#### Partial indices
-
-You can also create an index on a prefix of a column for string types (`CHAR`, `VARCHAR`, etc.), and for `TEXT` and `BLOB` columns you must do this.
-
-This will create an index on the first 3 characters of last_name:
-
-```sql
-ALTER TABLE ref_users_big DROP INDEX user_name;
-CREATE INDEX user_name ON ref_users_big (last_name(3));
-```
-
-```sql
-Query OK, 0 rows affected (0.31 sec)
-Records: 0  Duplicates: 0  Warnings: 0
-
-Query OK, 0 rows affected (37.85 sec)
-Records: 0  Duplicates: 0  Warnings: 0
-```
-
-Speed for the new query is slower than before (0.16 seconds vs. 0.04 seconds), as expected, but 160 milliseconds for hashing three characters honestly isn't that bad. If you have tremendously large tables, limited disk space, or are worried about the write performance impact, this may be a good option for you.
-
-#### JSON / Longtext
-
-JSON has its own special requirements to be indexed, mostly if you're storing strings. First, you must select a specific part of the column's rows to be the indexed key, known as a functional key part. Additionally, the key has to have a prefix length assigned to it, but functional key parts don't allow that. Finally if you `CAST(foo) AS CHAR(n)` the selected part so the index is stored properly, the returned string has the `utf8mb4_0900_ai_ci` collation, but `JSON_UNQUOTE()` (which is done implicitly as part of selecting a part of a row to be indexed) has the `utf8mb4_bin` collation. The easiest workaround is to specify the latter's collation as part of the index creation. Also, this requires the stored data to be `k:v` objects, rather than arrays.
-
-
-```sql
-CREATE INDEX owned_idx ON zaps (
-  (
-    CAST(
-      used_by ->> "$.user_id" AS CHAR(16)
-    ) COLLATE utf8mb4_bin
-  )
-);
-Query OK, 0 rows affected (0.50 sec)
-Records: 0  Duplicates: 0  Warnings: 0
-```
-
-Alternatively, if the key you want to index can be cast to an `int`, you can use generated columns to accomplish this; you can even (as of MySQL 8.0.23) make them invisible so they don't show up for normal queries:
-
-```sql
-ALTER TABLE
-  zaps
-ADD
-  COLUMN used_by_idx_col BIGINT UNSIGNED GENERATED ALWAYS AS (
-    CAST(
-      used_by ->> "$.user_id" AS UNSIGNED
-    )
-  ) INVISIBLE;
-```
-
-```sql
-Query OK, 0 rows affected (0.09 sec)
-Records: 0  Duplicates: 0  Warnings: 0
-```
-
-```sql
-CREATE INDEX used_by_idx ON zaps (used_by_idx_col);
-```
-
-```sql
-Query OK, 0 rows affected (0.36 sec)
-Records: 0  Duplicates: 0  Warnings: 0
-```
-
-This creates an invisible column `used_by_idx_col` which automatically generates a value based on the key `user_id` in the column `used_by`, casting it to an `UNSIGNED BIGINT`. The column is invisible unless specified:
-
-```sql
-SELECT * FROM zaps\G
-```
-
-```sql
-*************************** 1. row ***************************
-             id: 1
-         zap_id: 1
-     created_at: 2022-12-30 11:46:04
-last_updated_at: NULL
-       owned_by: 42
-        used_by: {"user_id": "42"}
-1 row in set (0.00 sec)
-```
-
-```sql
-SELECT *, used_by_idx_col  FROM zaps\G
-```
-
-```sql
-*************************** 1. row ***************************
-             id: 1
-         zap_id: 1
-     created_at: 2022-12-30 11:46:04
-last_updated_at: NULL
-       owned_by: 42
-        used_by: {"user_id": "42"}
-used_by_idx_col: 42
-1 row in set (0.00 sec)
-```
-
-#### Composite indices
-
-An index can also be created across multiple columns - for InnoDB, up to 16.
-
-```sql
-CREATE INDEX full_name ON ref_users (first_name, last_name);
-```
-
-```sql
-Query OK, 0 rows affected (40.09 sec)
-Records: 0  Duplicates: 0  Warnings: 0
-```
-
-First, we'll use `IGNORE INDEX` to direct SQL to ignore the index we just created. This query counts the duplicate name tuples. Since the `id` is being included, and `GROUPing` it would result in an empty set (as it's the primary key, and thus guaranteed to be unique), `ANY VALUE` must be specified to let MySQL know that the result can be non-deterministic. Finally, `EXPLAIN ANALYZE` is being used to run the query, and explain what it's doing. This differs from `EXPLAIN`, which guesses at what would be done, but doesn't actually perform the query. Be careful using `EXPLAIN ANALYZE`, especially with destructive actions, since those queries will actually be performed!
-
-```sql
-EXPLAIN ANALYZE
-SELECT
-  ANY_VALUE(id),
-  first_name,
-  last_name,
-  COUNT(*) c
-FROM
-  ref_users IGNORE INDEX(full_name)
-GROUP BY
-  first_name,
-  last_name
-HAVING
-  c > 1\G
-```
-
-```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Filter: (c > 1)  (actual time=17726.018..19132.446 rows=962 loops=1)
-    -> Table scan on <temporary>  (actual time=0.005..927.857 rows=999037 loops=1)
-        -> Aggregate using temporary table  (actual time=17725.897..18864.869 rows=999037 loops=1)
-            -> Table scan on ref_users  (cost=100560.90 rows=997354) (actual time=0.405..7162.749 rows=1000000 loops=1)
-
-1 row in set (19.58 sec)
-```
-
-The query took 19.58 seconds, and resulted in 962 rows. The output is read from the bottom up - a table scan was performed on the entire table, then a temporary table with the `GROUP BY` aggregation was created, and finally a second table scan on that temporary table was performed to find the duplicated tuples.
-
-If you're curious, `actual time` is in milliseconds, and consists of two timings - the first is the time to initiate the step and return the first row; the second is the time to initiate the step and return all rows. `cost` is an arbitrary number indicating what the query cost optimizer thinks the query costs to perform, and is meaningless.
-
-```sql
-EXPLAIN ANALYZE
-SELECT
-  ANY_VALUE(id),
-  first_name,
-  last_name,
-  COUNT(*) c
-FROM
-  ref_users
-GROUP BY
-  first_name,
-  last_name
-HAVING
-  c > 1\G
-```
-
-```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Filter: (c > 1)  (actual time=8.627..9276.021 rows=962 loops=1)
-    -> Group aggregate: count(0)  (actual time=0.756..8703.629 rows=999037 loops=1)
-        -> Index scan on ref_users using full_name  (cost=100560.90 rows=997354) (actual time=0.683..5574.086 rows=1000000 loops=1)
-
-1 row in set (9.28 sec)
-```
-
-With the index in place, an index scan is performed instead of two table scans, resulting in a ~2x speedup.
-
-Another example, retreiving a specific doubled tuple that I know exists:
-
-```sql
-SELECT
-  *
-FROM
-  ref_users USE INDEX()
-WHERE
-  first_name = 'Zoltai'
-AND
-  last_name = 'Tupler';
-```
-
-```sql
-+--------+------------+-----------+---------+
-| id     | first_name | last_name | user_id |
-+--------+------------+-----------+---------+
-| 173469 | Zoltai     | Tupler    |  173469 |
-| 923085 | Zoltai     | Tupler    |  923085 |
-+--------+------------+-----------+---------+
-2 rows in set (6.72 sec)
-```
-
-Note that `USE INDEX()` is valid syntax to tell MySQL to ignore all indexes.
-
-If instead, either the `full_name` or `first_name` index is ignored on its own, its complement will be used, and they're effectively equally fast due to the filtered result set (although as shown, the query ignoring the `full_name` index is an order of magnitude slower):
-
-```sql
-EXPLAIN ANALYZE
-SELECT
-  *
-FROM
-  ref_users IGNORE INDEX(full_name)
-WHERE
-  first_name = 'Zoltai'
-  AND
-  last_name = 'Tupler'\G
-```
-
-```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Filter: (ref_users.last_name = 'Tupler')  (cost=11.18 rows=4) (actual time=3.944..4.044 rows=2 loops=1)
-    -> Index lookup on ref_users using first_name (first_name='Zoltai')  (cost=11.18 rows=43) (actual time=3.922..4.003 rows=43 loops=1)
-
-1 row in set (0.01 sec)
-```
-
-```sql
-EXPLAIN ANALYZE
-SELECT
-  *
-FROM
-  ref_users IGNORE INDEX(first_name)
-WHERE
-  first_name = 'Zoltai'
-AND
-  last_name = 'Tupler'\G
-```
-
-```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Index lookup on ref_users using full_name (first_name='Zoltai', last_name='Tupler')  (cost=0.70 rows=2) (actual time=0.369..0.394 rows=2 loops=1)
-
-1 row in set (0.00 sec)
-```
-
-#### Testing indices
-
-MySQL 8 added the ability to toggle an index on and off, without actually dropping it. This way, if you want to test whether or not an index is helpful, you can toggle it off, observe query performance, and then decide whether or not to leave it.
-
-```sql
-ALTER TABLE ref_users ALTER INDEX first_name INVISIBLE;
-```
-
-```sql
-Query OK, 0 rows affected (0.28 sec)
-Records: 0  Duplicates: 0  Warnings: 0
-```
-
-#### Descending indices
-
-By default, indices are sorted in ascending order. While they can still be used when reversed, it's not as fast (although the performance difference may be minimal - test your theory before committing to it). If you are frequently querying something with `ORDER BY <row> DESC`, it may be helpful to instead create an index in descending order.
-
-```sql
-CREATE INDEX first_desc ON ref_users (first_name DESC);
-```
-
-```sql
-Query OK, 0 rows affected (41.18 sec)
-Records: 0  Duplicates: 0  Warnings: 0
-```
-
-#### When indicies aren't helpful
-
-You may have noticed in a few of the previous `EXPLAIN ANALYZE` statements two different kinds of inner joins - `nested loop inner join`, and `inner hash join`. A nested loop join is exactly what it sounds like:
-
-```python
-for tuple_i in table_1:
-    for tuple_j in table_2
-        if join_is_satisfied(tuple_i, tuple_j):
-            yield (tuple_i, tuple_j)
-```
-
-This has `O(MN)` time complexity, where `M` and `N` are the number of tuples in each table. If there's an index, the 2nd loop is using it for the lookup rather than another table scan, which makes the time complexity `O(Mlog(N))`, but with large sizes this is still quite bad. Here is an example on two tables with one million rows each:
-
-```sql
-EXPLAIN ANALYZE
-SELECT
-  full_name
-FROM
-  ref_users
-JOIN
-  zaps
-ON
-  ref_users.user_id = zaps.owned_by\G
-```
-
-```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Nested loop inner join  (cost=498015.60 rows=993197) (actual time=6.998..360927.896 rows=1000000 loops=1)
-    -> Table scan on zaps  (cost=100160.95 rows=993197) (actual time=6.685..8804.370 rows=1000000 loops=1)
-    -> Single-row index lookup on ref_users using user_id (user_id=zaps.owned_by)  (cost=0.30 rows=1) (actual time=0.350..0.350 rows=1 loops=1000000)
-
-1 row in set (6 min 2.41 sec)
-```
-
-A better solution is a hash join, specifically a grace hash join, named after the GRACE database created in the 1980s at the University of Tokyo, which pioneered this method.
-
-```python
-dict_table_1 = {id: row for id, row in table_1}
-dict_table_2 = {id: row for id, row in table_2}
-for tuple_i in dict_table_1.items():
-    for tuple_j in dict_table_2.items():
-        if join_is_satisfied(tuple_i, tuple_j):
-            yield (tuple_i, tuple_j)
-```
-
-While this looks very similar, there are details I've glossed over about the partioning method (it's recursive), and of course hash lookups are (optimally) `O(1)`, which speeds things up tremendously. The total time complexity for this method is `3(M+N)`.
-
-MySQL [added a hash join in 8.0.18](https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/), but it comes with some limitations; chiefly that a table must fit into memory, and annoyingly, that the optimizer will often decide to use a nested loop if indexes exist. If it can be used, though, compare the difference:
-
-```sql
-EXPLAIN ANALYZE
-SELECT
-  full_name
-FROM
-  ref_users
-IGNORE INDEX (user_id)
-JOIN
-  zaps
-ON
-  ref_users.user_id = zaps.owned_by\G
-```
-
-```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Inner hash join (ref_users.user_id = zaps.owned_by)  (cost=98991977261.77 rows=993197) (actual time=7814.295..21403.160 rows=1000000 loops=1)
-    -> Table scan on ref_users  (cost=0.03 rows=996699) (actual time=0.402..9319.650 rows=1000000 loops=1)
-    -> Hash
-        -> Table scan on zaps  (cost=100160.95 rows=993197) (actual time=4.566..6810.026 rows=1000000 loops=1)
-
-1 row in set (21.93 sec)
-```
-
-### Predicates
-
-#### WHERE
-
-`WHERE` is the easiest to understand and apply, and will cover most of your needs.
-
-```sql
-SELECT
-  id,
-  CONCAT_WS(', ', last_name, first_name) AS name,
-  city,
-  job_title
-FROM
-  customers
-WHERE
-  city = 'Seattle';
-```
-
-``sql
-+----+----------------------+---------+-----------+
-| id | name                 | city    | job_title |
-+----+----------------------+---------+-----------+
-|  1 | Bedecs, Anna         | Seattle | Owner     |
-| 17 | Bagel, Jean Philippe | Seattle | Owner     |
-+----+----------------------+---------+-----------+
-2 rows in set (0.00 sec)
-```
-
-You may also have seen or used the wildcard `%` with `LIKE` and `NOT LIKE`.
-
-```sql
-SELECT
-  id,
-  CONCAT_WS(', ', last_name, first_name) AS name,
-  city,
-  job_title
-FROM
-  customers
-WHERE
-  city LIKE 'Sea%';
-```
-
-```sql
-+----+----------------------+---------+-----------+
-| id | name                 | city    | job_title |
-+----+----------------------+---------+-----------+
-|  1 | Bedecs, Anna         | Seattle | Owner     |
-| 17 | Bagel, Jean Philippe | Seattle | Owner     |
-+----+----------------------+---------+-----------+
-2 rows in set (0.00 sec)
-```
-
-These two are functionally equivalent queries. However, if there is an index on the predicate column, and you use a leading wildcard (e.g. `LIKE '%attle'`), MySQL cannot use the index, and will instead perform a table scan. If you can avoid using leading wildcards on large tables, do so. It's also worth noting that there are many times when the query optimizer determines that the table scan would be faster than using an index, and so will do so anyway. [Index usage can be hinted](https://dev.mysql.com/doc/refman/8.0/en/index-hints.html), forced, and ignored, although as of MySQL 8.0.20, the old syntax (which included hints) [is deprecated](https://dev.mysql.com/doc/refman/8.0/en/optimizer-hints.html#optimizer-hints-index-level). Examples of both are below with an `EXPLAIN SELECT`.
-
-```sql
-EXPLAIN SELECT
-  id,
-  city,
-  CONCAT_WS(', ', last_name, first_name) AS name,
-  job_title
-FROM
-  customers USE INDEX(city)
-WHERE
-  city LIKE 'Sea%'\G
-```
-
-```sql
-*************************** 1. row ***************************
-           id: 1
-  select_type: SIMPLE
-        table: customers
-   partitions: NULL
-         type: range
-possible_keys: city
-          key: city
-      key_len: 153
-          ref: NULL
-         rows: 2
-     filtered: 100.00
-        Extra: Using index condition
-1 row in set, 1 warning (0.00 sec)
-```
-
-```sql
--- NOTE: with the leading wildcard, the index is disabled, even if FORCED
-EXPLAIN SELECT
-  id,
-  city,
-  CONCAT_WS(', ', last_name, first_name) AS name,
-  job_title
-FROM
-  customers FORCE INDEX(city)
-WHERE
-  city LIKE '%Sea%'\G
-```
-
-```sql
-*************************** 1. row ***************************
-           id: 1
-  select_type: SIMPLE
-        table: customers
-   partitions: NULL
-         type: ALL
-possible_keys: NULL
-          key: NULL
-      key_len: NULL
-          ref: NULL
-         rows: 29
-     filtered: 11.11
-        Extra: Using where
-1 row in set, 1 warning (0.00 sec)
-```
-
-```sql
--- NOTE: the new syntax requires the table and column to be specified
-EXPLAIN
-SELECT
-  id,
-  city,
-  CONCAT_WS(', ', last_name, first_name) AS name,
-  job_title
-FROM
-  customers
-    /*+ INDEX(customers city) */
-WHERE
-  city LIKE 'Sea%'\G
-```
-
-```sql
-*************************** 1. row ***************************
-           id: 1
-  select_type: SIMPLE
-        table: customers
-   partitions: NULL
-         type: range
-possible_keys: city
-          key: city
-      key_len: 153
-          ref: NULL
-         rows: 2
-     filtered: 100.00
-        Extra: Using index condition
-1 row in set, 1 warning (0.00 sec)
-```
-
-#### HAVING
-
-Earlier, we used `HAVING` in a `GROUP BY` aggregation. The difference between the two is that `WHERE` filters the results before they're sent to be aggregated, whereas `HAVING` filters the aggregation, and thus predicates relying on the aggregation result can be used. It's not limited to only aggregation results, though - a common use case is to allow the use of aliases or subquery results in filtering. Be aware that it's generally more performant to use `WHERE` if possible (consider re-writing your query if it isn't).
-
-```sql
-SELECT
-  c.first_name,
-  c.last_name,
-  c.city,
-  (
-    SELECT
-      status_name
-    FROM
-      orders_status os
-    WHERE
-      os.id = o.status_id
-  ) AS order_status
-FROM
-  customers c
-  JOIN orders o ON c.id = o.customer_id
-WHERE
-  c.job_title LIKE 'Purchasing%'
-  AND
-  order_status = 'New';
-ERROR 1054 (42S22): Unknown column 'order_status' in 'where clause'
-```
-
-The desired output here is to produce the name and city of any customer who has a job title starting with `Purchasing` and has placed a new order. Since the `order_status` column is the result of a subquery (returning the text name of a given order status ID), it can't be filtered with `WHERE`.
-
-```sql
-SELECT
-  c.first_name,
-  c.last_name,
-  c.city,
-  (
-    SELECT
-      status_name
-    FROM
-      orders_status os
-    WHERE
-      os.id = o.status_id
-  ) AS order_status
-FROM
-  customers c
-  JOIN orders o ON c.id = o.customer_id
-WHERE
-  c.job_title LIKE 'Purchasing%'
-HAVING
-  order_status = 'New';
-```
-
-```sql
-+------------+---------------+-------------+--------------+
-| first_name | last_name     | city        | order_status |
-+------------+---------------+-------------+--------------+
-| Thomas     | Axen          | Los Angelas | New          |
-| Christina  | Lee           | New York    | New          |
-| Christina  | Lee           | New York    | New          |
-| Francisco  | Pérez-Olaeta  | Milwaukee   | New          |
-| Elizabeth  | Andersen      | Portland    | New          |
-| Roland     | Wacker        | Chicago     | New          |
-| Peter      | Krschne       | Miami       | New          |
-| Peter      | Krschne       | Miami       | New          |
-| John       | Edwards       | Las Vegas   | New          |
-| Karen      | Toh           | Las Vegas   | New          |
-| Amritansh  | Raghav        | Memphis     | New          |
-| Soo Jung   | Lee           | Denver      | New          |
-+------------+---------------+-------------+--------------+
-12 rows in set (0.02 sec)
-```
-
-This is somewhat of a contrived example, since it's not necessary to return the actual `order_status` text at. However, if desired, it can be simplified with another `JOIN` instead of `HAVING`:
-
-```sql
-SELECT
-  c.first_name,
-  c.last_name,
-  c.city,
-  os.status_name AS order_status
-FROM
-  customers c
-  JOIN orders o ON c.id = o.customer_id
-  JOIN orders_status os ON os.id = o.status_id
-WHERE
-  c.job_title LIKE 'Purchasing%'
-  AND
-  os.status_name = 'New';
-```
-
-```sql
-+------------+---------------+-------------+--------------+
-| first_name | last_name     | city        | order_status |
-+------------+---------------+-------------+--------------+
-| Thomas     | Axen          | Los Angelas | New          |
-| Christina  | Lee           | New York    | New          |
-| Christina  | Lee           | New York    | New          |
-| Francisco  | Pérez-Olaeta  | Milwaukee   | New          |
-| Elizabeth  | Andersen      | Portland    | New          |
-| Roland     | Wacker        | Chicago     | New          |
-| Peter      | Krschne       | Miami       | New          |
-| Peter      | Krschne       | Miami       | New          |
-| John       | Edwards       | Las Vegas   | New          |
-| Karen      | Toh           | Las Vegas   | New          |
-| Amritansh  | Raghav        | Memphis     | New          |
-| Soo Jung   | Lee           | Denver      | New          |
-+------------+---------------+-------------+--------------+
-12 rows in set (0.02 sec)
-```
-
-Examining the two with `EXPLAIN ANALYZE` shows the differences:
-
-```sql
---- HAVING query
-*************************** 1. row ***************************
-EXPLAIN: -> Filter: (order_status = 'New')  (actual time=0.701..4.597 rows=12 loops=1)
-    -> Nested loop inner join  (cost=6.60 rows=10) (actual time=0.574..3.200 rows=42 loops=1)
-        -> Filter: (c.job_title like 'Purchasing%')  (cost=3.15 rows=3) (actual time=0.349..0.505 rows=20 loops=1)
-            -> Table scan on c  (cost=3.15 rows=29) (actual time=0.333..0.444 rows=29 loops=1)
-        -> Index lookup on o using customer_id (customer_id=c.id)  (cost=0.85 rows=3) (actual time=0.107..0.132 rows=2 loops=20)
-    -> Select #2 (subquery in condition; dependent)
-        -> Single-row index lookup on os using PRIMARY (id=o.status_id)  (cost=0.35 rows=1) (actual time=0.022..0.022 rows=1 loops=54)
--> Select #2 (subquery in projection; dependent)
-    -> Single-row index lookup on os using PRIMARY (id=o.status_id)  (cost=0.35 rows=1) (actual time=0.022..0.022 rows=1 loops=54)
-
-1 row in set, 1 warning (0.00 sec)
-```
-
-```sql
--- This is less of a warning, and more of a note stating that the query optimizer decided to resolve order.status_id in the first SELECT, rather than the subquery where it's referenced.
-SHOW WARNINGS\G
-*************************** 1. row ***************************
-  Level: Note
-   Code: 1276
-Message: Field or reference 'northwind.o.status_id' of SELECT #2 was resolved in SELECT #1
-1 row in set (0.00 sec)
-```
-
-```sql
---- Multiple JOIN query
-*************************** 1. row ***************************
-EXPLAIN: -> Nested loop inner join  (cost=6.33 rows=0) (actual time=1.645..8.714 rows=12 loops=1)
-    -> Inner hash join (no condition)  (cost=3.80 rows=0) (actual time=1.161..1.665 rows=20 loops=1)
-        -> Filter: (c.job_title like 'Purchasing%')  (cost=3.15 rows=3) (actual time=0.669..1.062 rows=20 loops=1)
-            -> Table scan on c  (cost=3.15 rows=29) (actual time=0.640..0.922 rows=29 loops=1)
-        -> Hash
-            -> Filter: (os.status_name = 'New')  (cost=0.65 rows=1) (actual time=0.262..0.338 rows=1 loops=1)
-                -> Table scan on os  (cost=0.65 rows=4) (actual time=0.251..0.319 rows=4 loops=1)
-    -> Filter: (o.status_id = os.id)  (cost=0.78 rows=1) (actual time=0.301..0.348 rows=1 loops=20)
-        -> Index lookup on o using customer_id (customer_id=c.id)  (cost=0.78 rows=3) (actual time=0.283..0.338 rows=2 loops=20)
-
-1 row in set (0.01 sec)
-```
-
-## Query optimization
-
-Finally into the fun stuff!
-
-First, I'll spoil a lot of this - it's likely that you won't have to do much of this. MySQL's optimizer is actually pretty decent. That said, there are times when you will, and knowing what _should_ be happening, and how to compare it to what is actually happening is a useful skill.
-
-### SELECT *
-
-If you're just exploring a schema, there's nothing wrong with `SELECT * FROM <table> LIMIT 10` or some other small number (< ~1000). It will be nearly instantaneous. However, the problem arises when you're also using `ORDER BY`. Recall that we had a composite index on `(first_name, last_name)` called `full_name`. Compare these two:
-
-```sql
-EXPLAIN ANALYZE
-SELECT
-  *
-FROM
-  ref_users
-ORDER BY
-  first_name,
-  last_name\G
-```
-
-```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Sort: ref_users.first_name, ref_users.last_name  (cost=100495.40 rows=996699) (actual time=12199.513..12603.379 rows=1000000 loops=1)
-    -> Table scan on ref_users  (cost=100495.40 rows=996699) (actual time=1.755..7039.004 rows=1000000 loops=1)
-
-1 row in set (13.68 sec)
-```
-
-```sql
-EXPLAIN ANALYZE
-SELECT
-  id,
-  first_name,
-  last_name
-FROM
-  ref_users
-ORDER BY
-  first_name,
-  last_name\G
-```
-
-```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Index scan on ref_users using full_name  (cost=100495.40 rows=996699) (actual time=0.433..5413.188 rows=1000000 loops=1)
-
-1 row in set (6.39 sec)
-```
-
-Since the the table includes columns not covered by the index (`user_id`), it would take longer to use the index and then find columns not in the index than to just do a table scan. Observe:
-
-```sql
-EXPLAIN ANALYZE
-SELECT
-  *
-FROM
-  ref_users
-FORCE INDEX(full_name)
-ORDER BY
-  first_name,
-  last_name\G
-```
-
-```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Index scan on ref_users using full_name  (cost=348844.90 rows=996699) (actual time=11.273..65858.816 rows=1000000 loops=1)
-
-1 row in set (1 min 7.13 sec)
-```
-
-In comparison, if your `ORDER BY` is covered by the index (the primary key - `id` here - is implicitly part of indices, and thus doesn't cause a slowdown), queries can use it, and are much faster! If you're writing software that will be accessing a database, and you don't actually need all of the columns, don't request them. Take the time to be deliberate in what you request.
-
-### OFFSET / LIMIT
-
-If you need to get `n` rows from the middle of a table, unless you have a really good reason to do so, please don't do this:
-
-```sql
-USE test;
-Database changed
-```
-
-```sql
--- The alternate form (and, IMO, the clearer one) is LIMIT 10 OFFSET 500000
-SELECT * FROM ref_users LIMIT 500000,10;
-```
-
-```sql
-+--------+------------+-----------+---------+
-| id     | first_name | last_name | user_id |
-+--------+------------+-----------+---------+
-| 500001 | Cutlor     | Marlee    |  500001 |
-| 500002 | Schaper    | Tol       |  500002 |
-| 500003 | Toney      | Wait      |  500003 |
-| 500004 | Robbin     | Jordanson |  500004 |
-| 500005 | Weiner     | Mendelson |  500005 |
-| 500006 | Willow     | Joses     |  500006 |
-| 500007 | Weatherby  | Reginald  |  500007 |
-| 500008 | Frendel    | Hoxsie    |  500008 |
-| 500009 | Schonfeld  | Charmion  |  500009 |
-| 500010 | O'Doneven  | Theone    |  500010 |
-+--------+------------+-----------+---------+
-10 rows in set (3.10 sec)
-```
-
-Doing this causes a table scan up to the specified offset. Far better, if you have a known monotonic number (like `id`), is to use a `WHERE` predicate:
-
-```sql
-SELECT * FROM ref_users WHERE id > 500000 LIMIT 10;
-```
-
-```sql
-+--------+------------+-----------+---------+
-| id     | first_name | last_name | user_id |
-+--------+------------+-----------+---------+
-| 500001 | Cutlor     | Marlee    |  500001 |
-| 500002 | Schaper    | Tol       |  500002 |
-| 500003 | Toney      | Wait      |  500003 |
-| 500004 | Robbin     | Jordanson |  500004 |
-| 500005 | Weiner     | Mendelson |  500005 |
-| 500006 | Willow     | Joses     |  500006 |
-| 500007 | Weatherby  | Reginald  |  500007 |
-| 500008 | Frendel    | Hoxsie    |  500008 |
-| 500009 | Schonfeld  | Charmion  |  500009 |
-| 500010 | O'Doneven  | Theone    |  500010 |
-+--------+------------+-----------+---------+
-10 rows in set (0.01 sec)
-```
-
-Using `id` as the filter allows it to be used for an index range scan, which is nearly instant. If you were doing this programmatically to support pagination, the last value of `id` could be used for the next iteration's predicate.
-
-### DISTINCT
-
-`DISTINCT` is a very useful keyword for many operations when you want to not show duplicates. Unfortunately, it also adds a fairly hefty load to the database. That's not to say you _can't_ use it, but when writing code that will end up using this, ask yourself if you could intead handle de-duplication in the application. This also comes with tradeoffs, of course - you're now pulling more data over the network, and increasing load on the application. Generally speaking, databases are bound first by disk and memory, rather than CPU or network, so using compression (increased CPU load) and/or sending more data (not using `DISTINCT`) tends to increase overall performance, but you should experiment and profile your code.
-
-This also tends to be something that works well early on with little load, but as either the database or application grows, it becomes unwieldy.
-
-```sql
-EXPLAIN ANALYZE
-SELECT
-  first_name,
-  last_name
-FROM
-  ref_users\G
-```
-
-```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Index scan on ref_users using full_name  (cost=101977.37 rows=996699) (actual time=1.163..6200.004 rows=1000000 loops=1)
-
-1 row in set (7.09 sec)
-```
-
-```sql
-EXPLAIN ANALYZE
-SELECT DISTINCT
-  first_name,
-  last_name
-FROM
-  ref_users\G
-```
-
-```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Group (no aggregates)  (actual time=0.429..9110.455 rows=999037 loops=1)
-    -> Index scan on ref_users using full_name  (cost=101977.37 rows=996699) (actual time=0.403..6004.725 rows=1000000 loops=1)
-
-1 row in set (9.96 sec)
-```
-
-Bear in mind that the above was using an index scan! If there isn't a covering index available, this is the `DISTINCT` result:
-
-```sql
-EXPLAIN ANALYZE
-SELECT DISTINCT
-  first_name,
-  last_name
-FROM
-  ref_users
-USE INDEX()\G
-```
-
-```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Table scan on <temporary>  (actual time=0.015..694.662 rows=999037 loops=1)
-    -> Temporary table with deduplication  (cost=100495.40 rows=996699) (actual time=13580.563..14471.841 rows=999037 loops=1)
-        -> Table scan on ref_users  (cost=100495.40 rows=996699) (actual time=0.973..7443.480 rows=1000000 loops=1)
-
-1 row in set (15.72 sec)
-```
-
-## Cleanup
-
-This isn't something you'll do often, if at all, so may as well do so now, eh?
-
-```sql
-DROP SCHEMA foo;
-```
-
-```sql
-Query OK, 0 rows affected (0.05 sec)
-```
