@@ -31,7 +31,7 @@
       * [Why you might want foreign keys](#why-you-might-want-foreign-keys)
       * [Creating a foreign key](#creating-a-foreign-key)
       * [Demonstrating a foreign key](#demonstrating-a-foreign-key)
-    * [Determing table size](#determing-table-size)
+    * [Determining table size](#determining-table-size)
   * [Column operations](#column-operations)
     * [Adding columns](#adding-columns)
     * [Modfying columns](#modfying-columns)
@@ -278,6 +278,9 @@ SELECT
   schema_name AS 'Database'
 FROM
   information_schema.schemata;
+```
+
+```sql
 +--------------------+
 | Database           |
 +--------------------+
@@ -498,10 +501,6 @@ First, we'll select our new schema so we don't have to constantly specify it. I'
 
 ```sql
 USE foo;
-```
-
-```sql
-Database changed
 ```
 
 Now, we'll create the `users` table.
@@ -786,11 +785,11 @@ TABLE zaps;
 We can `JOIN` on this if we want.
 
 ```sql
-SELECT
-  *
+SELECT *
 FROM
   users
-JOIN zaps ON users.user_id = zaps.owned_by\G
+JOIN zaps ON
+  users.user_id = zaps.owned_by\G
 *************************** 1. row ***************************
              id: 1
      first_name: Stephan
@@ -812,11 +811,12 @@ That's all well and good, but what if I want to delete my account? Wouldn't it b
 ```sql
 ALTER TABLE
   zaps
-ADD
-  FOREIGN KEY (owned_by)
-  REFERENCES users (user_id)
-  ON UPDATE CASCADE
-  ON DELETE CASCADE;
+ADD FOREIGN KEY
+  (owned_by)
+REFERENCES users
+  (user_id)
+ON UPDATE CASCADE
+ON DELETE CASCADE;
 ```
 
 ```sql
@@ -875,9 +875,11 @@ Rows matched: 1  Changed: 1  Warnings: 0
 ```
 
 ```sql
-SELECT * FROM users
-  JOIN zaps ON
-users.user_id = zaps.owned_by\G
+SELECT *
+FROM
+  users
+JOIN zaps ON
+  users.user_id = zaps.owned_by\G
 ```
 
 ```sql
@@ -913,7 +915,7 @@ SELECT * FROM zaps;
 Empty set (0.00 sec)
 ```
 
-### Determing table size
+### Determining table size
 
 In order to find out how many rows are in a table, there are a few ways of doing so. InnoDB maintains information about tables in the `INFORMATION_SCHEMA.TABLES` table, including an estimate of row count. However, it's just that - an estimate. It can be made to be accurate if you use `ANALYZE TABLE`, but in production, you shouldn't do this (to be clear, it should be done, but carefully), since it places a table-wide read lock during the process. You can also use the query `SELECT COUNT(*)`, but that will perform a table scan (where the entire table is read sequentially, without indices), so it may have a performance impact on the database, as it's consuming a lot of available IOPS. Finally, assuming you have an auto-incrementing `id` field in the table, you can use `SELECT id FROM <table> ORDER BY id DESC LIMIT 1` to get the last incremented value. This is also an estimate, since it doesn't take any deletions into account (auto-increment is monotonic), but it's extremely fast.
 
