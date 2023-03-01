@@ -318,32 +318,95 @@ LIMIT 10;
 
 ##### Extracting scalars from an object
 
+You can select a JSON column mixed in with non-JSON as you'd expect, and the entire contents will be displayed.
+
 ```sql
--- the ->> operator is shorthand for JSON_UNQUOTE(JSON_EXTRACT())
 SELECT
+  user_id,
   email,
-  user_json->>'$.e_key'
+  user_json
 FROM
   gensql
 LIMIT 10;
 ```
 
 ```sql
-+---------------------------------+-----------------------------------------------------------+
-| email                           | user_json->>'$.e_key'                                     |
-+---------------------------------+-----------------------------------------------------------+
-| theresita.urbanna@persuader.com | NULL                                                      |
-| lutero.leveridge@batch.com      | NULL                                                      |
-| marge.belier@railroad.com       | NULL                                                      |
-| blondy.burnley@comic.com        | NULL                                                      |
-| donelle.labors@amused.com       | {"d_key": ["blanching", "idealness", "unplug", "bronco"]} |
-| staci.amalbena@carded.com       | NULL                                                      |
-| daren.lynus@blooper.com         | NULL                                                      |
-| norton.platas@procurer.com      | NULL                                                      |
-| crin.gombosi@prewar.com         | NULL                                                      |
-| mackenzie.youngran@abridge.com  | {"d_key": ["judicial", "waffle", "scion", "lugged"]}      |
-+---------------------------------+-----------------------------------------------------------+
++---------+-------------------------------+-----------------------------------------------------------------------------------------------+
+| user_id | email                         | user_json                                                                                     |
++---------+-------------------------------+-----------------------------------------------------------------------------------------------+
+|       1 | abba.wilder@bodacious.com     | {"a_key": "playable", "b_key": {"c_key": ["unscathed", "humongous", "surplus", "mousiness"]}} |
+|       2 | antonetta.bosson@chaplain.com | {"a_key": "obedience", "b_key": {"c_key": ["depletion", "carve", "driveway", "primate"]}}     |
+|       3 | cobb.fondea@contusion.com     | {"a_key": "activity", "b_key": {"c_key": ["famine", "huskiness", "unleash", "unknotted"]}}    |
+|       4 | hanan.keelin@aspect.com       | {"a_key": "iron", "b_key": {"c_key": ["exact", "postcard", "sauciness", "dispatch"]}}         |
+|       5 | kinna.lytle@epidermis.com     | {"a_key": "flannels", "b_key": {"c_key": ["sherry", "graded", "crusader", "rumble"]}}         |
+|       6 | carolynn.sewoll@starch.com    | {"a_key": "extrude", "b_key": {"c_key": ["harmony", "ferris", "confirm", "elevate"]}}         |
+|       7 | ola.pride@defile.com          | {"a_key": "blurt", "b_key": {"c_key": ["expectant", "half", "coming", "remover"]}}            |
+|       8 | orella.acima@subwoofer.com    | {"a_key": "grape", "b_key": {"c_key": ["wrist", "galley", "fragment", "scurvy"]}}             |
+|       9 | odilia.thorr@daredevil.com    | {"a_key": "numbing", "b_key": {"c_key": ["glutinous", "repacking", "reliant", "polygon"]}}    |
+|      10 | berrie.marybella@undertow.com | {"a_key": "unadvised", "b_key": {"c_key": ["grove", "cornhusk", "darkening", "grazing"]}}     |
++---------+-------------------------------+-----------------------------------------------------------------------------------------------+
+10 rows in set (0.01 sec)
+```
+
+You can also extract specific keys:
+
+```sql
+-- the ->> operator is shorthand for JSON_UNQUOTE(JSON_EXTRACT())
+SELECT
+  email,
+  user_json->>'$.b_key'
+FROM
+  gensql
+LIMIT 10;
+```
+
+```sql
++---------+-------------------------------+---------------------------------------------------------------+
+| user_id | email                         | user_json->>'$.b_key'                                         |
++---------+-------------------------------+---------------------------------------------------------------+
+|       1 | abba.wilder@bodacious.com     | {"c_key": ["unscathed", "humongous", "surplus", "mousiness"]} |
+|       2 | antonetta.bosson@chaplain.com | {"c_key": ["depletion", "carve", "driveway", "primate"]}      |
+|       3 | cobb.fondea@contusion.com     | {"c_key": ["famine", "huskiness", "unleash", "unknotted"]}    |
+|       4 | hanan.keelin@aspect.com       | {"c_key": ["exact", "postcard", "sauciness", "dispatch"]}     |
+|       5 | kinna.lytle@epidermis.com     | {"c_key": ["sherry", "graded", "crusader", "rumble"]}         |
+|       6 | carolynn.sewoll@starch.com    | {"c_key": ["harmony", "ferris", "confirm", "elevate"]}        |
+|       7 | ola.pride@defile.com          | {"c_key": ["expectant", "half", "coming", "remover"]}         |
+|       8 | orella.acima@subwoofer.com    | {"c_key": ["wrist", "galley", "fragment", "scurvy"]}          |
+|       9 | odilia.thorr@daredevil.com    | {"c_key": ["glutinous", "repacking", "reliant", "polygon"]}   |
+|      10 | berrie.marybella@undertow.com | {"c_key": ["grove", "cornhusk", "darkening", "grazing"]}      |
++---------+-------------------------------+---------------------------------------------------------------+
 10 rows in set (0.00 sec)
+```
+
+
+Or nest extractions:
+
+```sql
+SELECT
+  user_id,
+  email,
+  user_json->>'$.b_key.c_key'
+FROM
+  gensql
+LIMIT 10;
+```
+
+```sql
++---------+-------------------------------+----------------------------------------------------+
+| user_id | email                         | user_json->>'$.b_key.c_key'                        |
++---------+-------------------------------+----------------------------------------------------+
+|       1 | abba.wilder@bodacious.com     | ["unscathed", "humongous", "surplus", "mousiness"] |
+|       2 | antonetta.bosson@chaplain.com | ["depletion", "carve", "driveway", "primate"]      |
+|       3 | cobb.fondea@contusion.com     | ["famine", "huskiness", "unleash", "unknotted"]    |
+|       4 | hanan.keelin@aspect.com       | ["exact", "postcard", "sauciness", "dispatch"]     |
+|       5 | kinna.lytle@epidermis.com     | ["sherry", "graded", "crusader", "rumble"]         |
+|       6 | carolynn.sewoll@starch.com    | ["harmony", "ferris", "confirm", "elevate"]        |
+|       7 | ola.pride@defile.com          | ["expectant", "half", "coming", "remover"]         |
+|       8 | orella.acima@subwoofer.com    | ["wrist", "galley", "fragment", "scurvy"]          |
+|       9 | odilia.thorr@daredevil.com    | ["glutinous", "repacking", "reliant", "polygon"]   |
+|      10 | berrie.marybella@undertow.com | ["grove", "cornhusk", "darkening", "grazing"]      |
++---------+-------------------------------+----------------------------------------------------+
+10 rows in set (0.01 sec)
 ```
 
 ```sql
@@ -1162,11 +1225,11 @@ EXPLAIN ANALYZE
 SELECT
   full_name
 FROM
-  ref_users
+  ref_users_big
 JOIN
-  zaps
+  ref_zaps_big
 ON
-  ref_users.user_id = zaps.owned_by\G
+  ref_users_big.user_id = ref_zaps_big.owned_by\G
 ```
 
 ```sql
@@ -1360,7 +1423,7 @@ SELECT
   full_name
 FROM
   ref_users_big
-WHERE id > 500000
+WHERE user_id > 500000
 LIMIT 10;
 ```
 

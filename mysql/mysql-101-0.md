@@ -349,7 +349,10 @@ SELECT host, user FROM mysql.user;
 ```
 
 ```sql
-mysql> SELECT host, user FROM mysql.user;
+SELECT host, user FROM mysql.user;
+```
+
+```sql
 +-------------+------------------+
 | host        | user             |
 +-------------+------------------+
@@ -703,6 +706,34 @@ Message: Duplicate index 'user_id' defined on the table 'test.users'. This is de
 1 row in set (0.00 sec)
 ```
 
+Let's look at the table definition.
+
+```sql
+SHOW CREATE TABLE users\G
+```
+
+```sql
+*************************** 1. row ***************************
+       Table: users
+Create Table: CREATE TABLE `users` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `first_name` varchar(255) DEFAULT NULL,
+  `last_name` varchar(255) DEFAULT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uid` (`user_id`),
+  UNIQUE KEY `user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+1 row in set (0.01 sec)
+```
+
+<details>
+  <summary>What is SHOW CREATE TABLE?</summary>
+
+  `SHOW CREATE TABLE` is a command that lets you view the query that would be used to create the table in its current state. It's safe to do, and is a good way to view columns, their types, indexes, foreign keys, etc. for a given table.
+  </summary>
+</details>
+
 Ah - constraints like `UNIQUE` don't have to be redefined along with the rest of the column definition, and in doing so, we've duplicated a constraint. While allowed for now, it's not a good practice, so we'll get rid of it.
 
 ```sql
@@ -825,13 +856,6 @@ Records: 1  Duplicates: 0  Warnings: 0
 ```sql
 SHOW CREATE TABLE zaps\G
 ```
-
-<details>
-  <summary>What is this?</summary>
-
-  `SHOW CREATE TABLE` is a command that lets you view the query that would be used to create the table in its current state. It's safe to do, and is a good way to view columns, their types, indexes, foreign keys, etc. for a given table.
-  </summary>
-</details>
 
 ```sql
 *************************** 1. row ***************************
