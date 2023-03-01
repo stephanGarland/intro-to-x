@@ -1,6 +1,16 @@
 # MySQL 101 Part II
 
 - [MySQL 101 Part II](#mysql-101-part-ii)
+  - [Queries](#queries)
+    - [Predicates](#predicates)
+      - [WHERE](#where)
+    - [SELECT](#select)
+      - [Working with JSON](#working-with-json)
+        - [Finding non-null arrays](#finding-non-null-arrays)
+        - [Checking for a value inside an array](#checking-for-a-value-inside-an-array)
+        - [Extracting scalars from an object](#extracting-scalars-from-an-object)
+    - [INSERT](#insert)
+    - [TABLE](#table)
   - [Joins](#joins)
     - [Relational alegbra](#relational-alegbra)
     - [Types of joins](#types-of-joins)
@@ -25,6 +35,504 @@
     - [OFFSET / LIMIT](#offset--limit)
     - [DISTINCT](#distinct)
   - [Cleanup](#cleanup)
+
+## Queries
+
+### Predicates
+
+A predicate is a function which asserts that something is true or false. You can think of it like a filter.
+
+#### WHERE
+
+`WHERE` is the easiest to understand and apply, and will cover most of your needs.
+
+```sql
+SELECT
+  user_id, first_name, last_name
+FROM
+  users
+WHERE
+  country = 'Zimbabwe';
+```
+
+```sql
++---------+------------+-----------+
+| user_id | first_name | last_name |
++---------+------------+-----------+
+|     106 | Ivonne     | Barmen    |
+|    1149 | Myca       | Flieger   |
+|    2143 | Dallas     | Nimesh    |
+|    4401 | Jeana      | Naga      |
+|    4623 | Godiva     | Adal      |
+|    5582 | Lexie      | Fenwick   |
+|    5586 | Carrie     | Nich      |
+|    5793 | Marten     | Casady    |
+|    6072 | Feliza     | Culhert   |
+|    6467 | Wood       | O'Connor  |
+|    7093 | Miriam     | Galliett  |
+|    7669 | Cele       | Belden    |
+|    7675 | Araldo     | Hoes      |
+|    8106 | Imojean    | Beaudoin  |
+|    9438 | Sibby      | Luedtke   |
+|    9566 | Eb         | Cattima   |
+|    9606 | Alard      | Frodina   |
++---------+------------+-----------+
+17 rows in set (0.22 sec)
+```
+
+Note that we filtered the results with a predicate that wasn't even in the result set (`country`).
+
+You may also have seen or used the wildcard `%` with `LIKE` and `NOT LIKE`.
+
+```sql
+SELECT
+  user_id, first_name, last_name
+FROM
+  users
+WHERE
+  country
+LIKE 'Zim%';
+```
+
+```sql
++---------+------------+-----------+
+| user_id | first_name | last_name |
++---------+------------+-----------+
+|     106 | Ivonne     | Barmen    |
+|    1149 | Myca       | Flieger   |
+|    2143 | Dallas     | Nimesh    |
+|    4401 | Jeana      | Naga      |
+|    4623 | Godiva     | Adal      |
+|    5582 | Lexie      | Fenwick   |
+|    5586 | Carrie     | Nich      |
+|    5793 | Marten     | Casady    |
+|    6072 | Feliza     | Culhert   |
+|    6467 | Wood       | O'Connor  |
+|    7093 | Miriam     | Galliett  |
+|    7669 | Cele       | Belden    |
+|    7675 | Araldo     | Hoes      |
+|    8106 | Imojean    | Beaudoin  |
+|    9438 | Sibby      | Luedtke   |
+|    9566 | Eb         | Cattima   |
+|    9606 | Alard      | Frodina   |
++---------+------------+-----------+
+17 rows in set (0.22 sec)
+```
+
+These two are functionally equivalent queries. However, if there is an index on the predicate column, and you use a leading wildcard (e.g. `LIKE '%babwe'`), MySQL cannot use the index, and will instead perform a table scan. If you can avoid using leading wildcards on large tables, do so. It's also worth noting that there are many times when the query optimizer determines that the table scan would be faster than using an index, and so will do so anyway. [Index usage can be hinted](https://dev.mysql.com/doc/refman/8.0/en/index-hints.html), forced, and ignored, although as of MySQL 8.0.20, the old syntax (which included hints) [is deprecated](https://dev.mysql.com/doc/refman/8.0/en/optimizer-hints.html#optimizer-hints-index-level). Examples of both are below with an `EXPLAIN SELECT`. They're from a different schema and table, as I've already set up the index.
+
+```sql
+EXPLAIN SELECT
+  user_id, first_name, last_name
+FROM
+  test.ref_users
+USE INDEX (country)
+WHERE
+  country
+LIKE 'Zim%'\G
+```
+
+```sql
+*************************** 1. row ***************************
+           id: 1
+  select_type: SIMPLE
+        table: ref_users
+   partitions: NULL
+         type: range
+possible_keys: country
+          key: country
+      key_len: 1023
+          ref: NULL
+         rows: 3
+     filtered: 100.00
+        Extra: Using index condition
+1 row in set, 1 warning (0.01 sec)
+```
+
+```sql
+EXPLAIN SELECT
+  user_id, first_name, last_name
+FROM
+  test.ref_users
+FORCE INDEX (country)
+WHERE
+  country
+LIKE '%babwe'\G
+
+```sql
+*************************** 1. row ***************************
+           id: 1
+  select_type: SIMPLE
+        table: ref_users
+   partitions: NULL
+         type: ALL
+possible_keys: NULL
+          key: NULL
+      key_len: NULL
+          ref: NULL
+         rows: 1000
+     filtered: 11.11
+        Extra: Using where
+1 row in set, 1 warning (0.00 sec)
+```
+
+Even when using `FORCE INDEX`, it's not being used, because it can't.
+
+```sql
+EXPLAIN SELECT
+  user_id, first_name, last_name
+FROM
+  test.ref_users
+/*+ INDEX(ref_users country) */
+WHERE
+  country
+LIKE 'Zim%'\G
+```
+
+The new syntax, which looks like a C-style comment, requires both the table and column to be listed.
+
+```sql
+*************************** 1. row ***************************
+           id: 1
+  select_type: SIMPLE
+        table: customers
+   partitions: NULL
+         type: range
+possible_keys: city
+          key: city
+      key_len: 153
+          ref: NULL
+         rows: 2
+     filtered: 100.00
+        Extra: Using index condition
+1 row in set, 1 warning (0.00 sec)
+```
+
+### SELECT
+
+[MySQL docs.](https://dev.mysql.com/doc/refman/8.0/en/select.html)
+
+You use it to select data from tables (or `/dev/stdin`). Any questions?
+
+```sql
+SELECT * FROM ref_zaps LIMIT 10 OFFSET 15;
+```
+
+```sql
++--------+----------+----------------------+---------------------+-----------------+
+| zap_id | owned_by | shared_with          | created_at          | last_updated_at |
++--------+----------+----------------------+---------------------+-----------------+
+|     16 |      788 | []                   | 2013-10-16 21:25:30 | NULL            |
+|     17 |      689 | []                   | 2016-07-21 03:05:33 | NULL            |
+|     18 |      735 | []                   | 2020-12-16 13:51:04 | NULL            |
+|     19 |      802 | []                   | 2009-11-22 03:33:19 | NULL            |
+|     20 |      297 | [529, 805, 541, 498] | 1997-07-11 15:05:07 | NULL            |
+|     21 |      649 | []                   | 2015-05-18 20:08:31 | NULL            |
+|     22 |      438 | []                   | 2006-12-14 15:28:30 | NULL            |
+|     23 |      607 | []                   | 2013-04-15 17:57:19 | NULL            |
+|     24 |      460 | []                   | 2018-01-28 02:05:59 | NULL            |
+|     25 |      677 | []                   | 1995-06-07 21:46:30 | NULL            |
++--------+----------+----------------------+---------------------+-----------------+
+10 rows in set (0.01 sec)
+```
+
+<details>
+  <summary>Can you think of anything missing from this table? (HINT: SHOW CREATE TABLE)</summary>
+
+  There's no foreign key linking `owned_by` to a given user! In fact, they're just randomly generated numbers, but there are pairings. Let's create a foreign key now:
+  ```sql
+  ALTER TABLE ref_zaps ADD CONSTRAINT zap_owner_id FOREIGN KEY (owned_by) REFERENCES ref_users (user_id);
+  ```
+
+  ```sql
+  Query OK, 1000 rows affected (0.90 sec)
+  Records: 1000  Duplicates: 0  Warnings: 0
+  ```
+</details>
+
+#### Working with JSON
+
+Both JSON arrays and objects can be stored in JSON columns. Using them in queries isn't as straight-forward as other column types.
+
+##### Finding non-null arrays
+
+```sql
+SELECT *
+FROM
+  ref_zaps
+WHERE JSON_LENGTH(shared_with) > 0
+LIMIT 10;
+```
+
+```sql
++--------+----------+----------------------+---------------------+-----------------+
+| zap_id | owned_by | shared_with          | created_at          | last_updated_at |
++--------+----------+----------------------+---------------------+-----------------+
+|     20 |      297 | [529, 805, 541, 498] | 1997-07-11 15:05:07 | NULL            |
+|     40 |      312 | [395, 721, 397, 930] | 2016-11-15 03:42:41 | NULL            |
+|     60 |      469 | [261, 565, 326, 637] | 2011-09-21 11:40:22 | NULL            |
+|     80 |      505 | [753, 766, 812, 521] | 2001-07-04 15:28:08 | NULL            |
+|    100 |      459 | [884, 23, 163, 654]  | 2008-08-30 12:53:32 | NULL            |
+|    120 |      411 | [730, 484, 530, 449] | 2012-09-02 00:42:20 | NULL            |
+|    140 |      191 | [611, 798, 984, 583] | 2004-12-14 04:08:09 | NULL            |
+|    160 |      310 | [941, 353, 499, 668] | 2003-01-22 01:05:04 | NULL            |
+|    180 |      463 | [679, 639, 760, 784] | 2022-01-22 04:31:00 | NULL            |
+|    200 |       36 | [308, 955, 485, 298] | 2015-10-17 21:42:16 | NULL            |
++--------+----------+----------------------+---------------------+-----------------+
+10 rows in set (0.02 sec)
+```
+
+##### Checking for a value inside an array
+
+```sql
+SELECT
+  zap_id,
+  owned_by,
+  shared_with,
+  user_id,
+  full_name
+FROM ref_zaps
+JOIN
+  ref_users ON
+JSON_CONTAINS(shared_with, JSON_ARRAY(ref_users.user_id))
+LIMIT 10;
+```
+
+```sql
++--------+----------+---------------------+---------+--------------------+
+| zap_id | owned_by | shared_with         | user_id | full_name          |
++--------+----------+---------------------+---------+--------------------+
+|    240 |      697 | [3, 854, 486, 907]  |       3 | Gorlin, Alene      |
+|    100 |      459 | [884, 23, 163, 654] |      23 | Schnurr, Sissie    |
+|    700 |      947 | [28, 173, 33, 899]  |      28 | Russi, Bab         |
+|    560 |      869 | [258, 197, 724, 31] |      31 | Quince, Caryl      |
+|    700 |      947 | [28, 173, 33, 899]  |      33 | Langille, Tonya    |
+|    740 |      888 | [41, 221, 402, 301] |      41 | Kruter, Bonni      |
+|    460 |      566 | [45, 793, 553, 162] |      45 | Schuh, Gasparo     |
+|    940 |      211 | [497, 973, 323, 48] |      48 | Aylsworth, Steffen |
+|    260 |      861 | [313, 52, 334, 457] |      52 | Delwyn, Karoline   |
+|    420 |      667 | [524, 527, 948, 60] |      60 | Magen, Sherill     |
++--------+----------+---------------------+---------+--------------------+
+10 rows in set (0.88 sec)
+```
+
+##### Extracting scalars from an object
+
+```sql
+-- the ->> operator is shorthand for JSON_UNQUOTE(JSON_EXTRACT())
+SELECT
+  email,
+  user_json->>'$.e_key'
+FROM
+  gensql
+LIMIT 10;
+```
+
+```sql
++---------------------------------+-----------------------------------------------------------+
+| email                           | user_json->>'$.e_key'                                     |
++---------------------------------+-----------------------------------------------------------+
+| theresita.urbanna@persuader.com | NULL                                                      |
+| lutero.leveridge@batch.com      | NULL                                                      |
+| marge.belier@railroad.com       | NULL                                                      |
+| blondy.burnley@comic.com        | NULL                                                      |
+| donelle.labors@amused.com       | {"d_key": ["blanching", "idealness", "unplug", "bronco"]} |
+| staci.amalbena@carded.com       | NULL                                                      |
+| daren.lynus@blooper.com         | NULL                                                      |
+| norton.platas@procurer.com      | NULL                                                      |
+| crin.gombosi@prewar.com         | NULL                                                      |
+| mackenzie.youngran@abridge.com  | {"d_key": ["judicial", "waffle", "scion", "lugged"]}      |
++---------------------------------+-----------------------------------------------------------+
+10 rows in set (0.00 sec)
+```
+
+```sql
+-- the -> operator is shorthand for JSON_EXTRACT()
+-- arrays are 0-indexed, so this is a slice, like lst[1:3]
+SELECT
+  email,
+  user_json->'$.e_key.d_key[1 to 2]'
+FROM
+  gensql
+WHERE
+  user_json->>'$.e_key'
+IS NOT NULL
+LIMIT 10;
+```
+
+```sql
++--------------------------------+------------------------------------+
+| email                          | user_json->'$.e_key.d_key[1 to 2]' |
++--------------------------------+------------------------------------+
+| donelle.labors@amused.com      | ["idealness", "unplug"]            |
+| mackenzie.youngran@abridge.com | ["waffle", "scion"]                |
+| elset.kramer@tiny.com          | ["dimple", "manpower"]             |
+| theresita.faxen@plentiful.com  | ["appetizer", "huskiness"]         |
+| salomi.pasco@each.com          | ["tiptop", "unsnap"]               |
+| ashia.garate@varied.com        | ["bauble", "mayflower"]            |
+| jonathan.aulea@chastise.com    | ["senior", "silicon"]              |
+| gillan.mcnalley@slain.com      | ["provider", "gradient"]           |
+| madelon.harleigh@defiling.com  | ["evoke", "tidy"]                  |
+| dagny.iverson@entryway.com     | ["baton", "skillful"]              |
++--------------------------------+------------------------------------+
+10 rows in set (0.02 sec)
+```
+
+See [MySQL docs](https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html) for much more about JSON operations.
+
+### INSERT
+
+[MySQL docs.](https://dev.mysql.com/doc/refman/8.0/en/insert.html)
+
+`INSERT` is used to insert rows into a table. There is also an `UPSERT` equivalent, with the `ON DUPLICATE KEY UPDATE` clause. With this, if an `INSERT` would cause a key collision with a `UNIQUE` index (explicit or implicit, e.g. `PRIMARY KEY`), then an `UPDATE` of that row occurs instead.
+
+```sql
+INSERT INTO users
+  first_name, last_name, user_id)
+VALUES
+  ("Leeroy", "Jenkins", 42);
+```
+
+```sql
+ERROR 1062 (23000): Duplicate entry '42' for key 'users.PRIMARY'
+```
+
+Expectedly, that failed since `user_id`, which is our primary key, already has an entry at `42`.
+
+```sql
+SELECT * FROM
+  users
+WHERE
+  user_id = 42\G
+```
+
+```sql
+*************************** 1. row ***************************
+        user_id: 42
+     first_name: Ramona
+      last_name: Odelet
+      full_name: Odelet, Ramona
+          email: ramona.odelet@lucid.com
+           city: Foligno
+        country: Italy
+     created_at: 2003-07-29 07:34:15
+last_updated_at: NULL
+1 row in set (0.01 sec)
+```
+
+Now we can try again, this time with an instruction to perform an UPSERT.
+
+```sql
+INSERT INTO users
+  (first_name, last_name, user_id)
+VALUES
+  ("Leeroy", "Jenkins", 42) AS vals
+ON DUPLICATE KEY UPDATE
+  first_name = vals.first_name,
+  last_name = vals.last_name;
+```
+
+```sql
+Query OK, 2 rows affected (0.21 sec)
+```
+
+```sql
+SELECT * FROM users WHERE user_id = 42\G
+```
+
+```sql
+*************************** 1. row ***************************
+        user_id: 42
+     first_name: Leeroy
+      last_name: Jenkins
+      full_name: Jenkins, Leeroy
+          email: ramona.odelet@lucid.com
+           city: Foligno
+        country: Italy
+     created_at: 2003-07-29 07:34:15
+last_updated_at: 2023-02-27 13:24:26
+1 row in set (0.01 sec)
+```
+
+While `full_name` updated, since it's a `GENERATED` column, `email` is now incorrect. Also, note that `last_updated_at` has changed from `NULL`, since we've modified the row.
+
+Let's put the row back to how it was before.
+
+<details>
+  <summary>How can this be accomplished?</summary>
+
+  ```sql
+  -- first, let's be safe with a transaction
+  START TRANSACTION;
+  ```
+
+  ```sql
+  Query OK, 0 rows affected (0.01 sec)
+  ```
+
+  ```sql
+  -- then, use UPDATE
+  UPDATE users SET first_name = 'Ramona', last_name = 'Odelet' WHERE user_id = 42;
+  ```
+
+  ```sql
+  Query OK, 1 row affected (0.01 sec)
+  Rows matched: 1  Changed: 1  Warnings: 0
+  ```
+
+  ```sql
+  -- next, verify the work
+  SELECT * FROM users WHERE user_id = 42\G
+  ```
+
+  ```sql
+  *************************** 1. row ***************************
+          user_id: 42
+       first_name: Ramona
+        last_name: Odelet
+        full_name: Odelet, Ramona
+            email: ramona.odelet@lucid.com
+             city: Foligno
+          country: Italy
+       created_at: 2003-07-29 07:34:15
+  last_updated_at: 2023-02-27 13:30:10
+  1 row in set (0.00 sec)
+  ```
+
+  ```sql
+  -- finally, commit the result
+  COMMIT;
+  ```
+
+  ```sql
+  Query OK, 0 rows affected (0.08 sec)
+  ```
+</details>
+
+### TABLE
+
+[MySQL docs.](https://dev.mysql.com/doc/refman/8.0/en/table.html)
+
+`TABLE` is syntactic sugar for `SELECT * FROM <table>`. Works great if you know the table is small, but be careful on large tables!
+
+```sql
+TABLE users\G
+```
+
+```sql
+-- 9999 rows are above this...
+*************************** 10000. row ***************************
+        user_id: 10000
+     first_name: Gabrila
+      last_name: Lemmueu
+      full_name: Lemmueu, Gabrila
+          email: gabrila.lemmueu@urgent.com
+           city: Itanagar
+        country: India
+     created_at: 2020-12-10 01:58:35
+last_updated_at: NULL
+10000 rows in set (0.48 sec)
+```
 
 ## Joins
 
@@ -104,20 +612,20 @@ LIMIT 10;
 ```
 
 ```sql
-+--------+-------------------+--------------+--------------------+
-| zap_id | full_name         | city         | country            |
-+--------+-------------------+--------------+--------------------+
-|    411 | Jemena, Wyatt     | Chhatarpur   | India              |
-|    794 | Marienthal, Shirl | Guayaramerin | Bolivia            |
-|    830 | McGrody, Cointon  | Guatemala    | Guatemala          |
-|    697 | Harriman, Neda    | Huimin       | China              |
-|    110 | Lauter, Lorelle   | Bereeda      | Somalia            |
-|    942 | Lauter, Lorelle   | Bereeda      | Somalia            |
-|    772 | Race, Marsha      | Matanzas     | Dominican Republic |
-|    676 | Craven, Elfreda   | NanTong      | China              |
-|    715 | Azral, Terese     | Askim        | Norway             |
-|    405 | Hepza, Dyanne     | Heerenveen   | Netherlands        |
-+--------+-------------------+--------------+--------------------+
++--------+-------------------+-------------+----------------+
+| zap_id | full_name         | city        | country        |
++--------+-------------------+-------------+----------------+
+|    411 | MacPherson, Addie | Latina      | Italy          |
+|    794 | Airla, Valaree    | Pribram     | Czech Republic |
+|    830 | Kirschner, Robby  | Bikaner     | India          |
+|    697 | Bilski, Lewiss    | Vörderås    | Sweden         |
+|    110 | Yamauchi, Marleah | Rotterdam   | Netherlands    |
+|    942 | Yamauchi, Marleah | Rotterdam   | Netherlands    |
+|    772 | Calore, Ania      | Miyakojima  | Japan          |
+|    676 | Breger, Gratiana  | Valkeakoski | Finland        |
+|    715 | Serafina, Janith  | Morant Bay  | Jamaica        |
+|    405 | Beckman, Pavla    | Wackersdorf | Germany        |
++--------+-------------------+-------------+----------------+
 10 rows in set (0.02 sec)
 ```
 
@@ -133,7 +641,10 @@ SELECT
   z.owned_by
 FROM
   ref_users u
-  LEFT JOIN ref_zaps_joins z ON u.user_id = z.owned_by
+LEFT JOIN
+  ref_zaps_joins z
+ON
+  u.user_id = z.owned_by
 LIMIT 10;
 ```
 
@@ -141,18 +652,18 @@ LIMIT 10;
 +---------+-------------------+--------+----------+
 | user_id | full_name         | zap_id | owned_by |
 +---------+-------------------+--------+----------+
-|       1 | Jemena, Wyatt     |    411 |        1 |
-|       2 | Marienthal, Shirl |    794 |        2 |
-|       3 | Gorlin, Alene     |   NULL |     NULL |
-|       4 | McGrody, Cointon  |    830 |        4 |
-|       5 | Harriman, Neda    |    697 |        5 |
-|       6 | Lauter, Lorelle   |    942 |        6 |
-|       6 | Lauter, Lorelle   |    110 |        6 |
-|       7 | Race, Marsha      |    772 |        7 |
-|       8 | Craven, Elfreda   |    676 |        8 |
-|       9 | Azral, Terese     |    715 |        9 |
+|       1 | MacPherson, Addie |    411 |        1 |
+|       2 | Airla, Valaree    |    794 |        2 |
+|       3 | Nett, Sheppard    |   NULL |     NULL |
+|       4 | Kirschner, Robby  |    830 |        4 |
+|       5 | Bilski, Lewiss    |    697 |        5 |
+|       6 | Yamauchi, Marleah |    942 |        6 |
+|       6 | Yamauchi, Marleah |    110 |        6 |
+|       7 | Calore, Ania      |    772 |        7 |
+|       8 | Breger, Gratiana  |    676 |        8 |
+|       9 | Serafina, Janith  |    715 |        9 |
 +---------+-------------------+--------+----------+
-10 rows in set (0.05 sec)
+10 rows in set (0.09 sec)
 ```
 
 Of course, we previously put a foreign key on `zaps.owned_by`, precisely to prevent this kind of thing from happening. Still, you can see how this kind of query could be useful.
@@ -169,26 +680,29 @@ SELECT
   z.owned_by
 FROM
   ref_users u
-  RIGHT JOIN ref_zaps_joins z ON u.user_id = z.owned_by
+RIGHT JOIN
+  ref_zaps_joins z
+ON
+  u.user_id = z.owned_by
 LIMIT 10;
 ```
 
 ```sql
-+---------+--------------------+--------+----------+
-| user_id | full_name          | zap_id | owned_by |
-+---------+--------------------+--------+----------+
-|     602 | Pruchno, Kariotta  |      1 |      602 |
-|     593 | Adall, Greta       |      2 |      593 |
-|    NULL | NULL               |      3 |        0 |
-|     548 | Creedon, Barbara   |      4 |      548 |
-|     957 | Laszlo, Alleyn     |      5 |      957 |
-|     777 | Kopaz, Meir        |      6 |      777 |
-|     648 | Gildea, Christophe |      7 |      648 |
-|     959 | Rigby, Cecile      |      8 |      959 |
-|     569 | Zobkiw, Freemon    |      9 |      569 |
-|     429 | Reinhart, Glynnis  |     10 |      429 |
-+---------+--------------------+--------+----------+
-10 rows in set (0.02 sec)
++---------+------------------+--------+----------+
+| user_id | full_name        | zap_id | owned_by |
++---------+------------------+--------+----------+
+|     602 | Hirz, Datha      |      1 |      602 |
+|     593 | Meldoh, Vergil   |      2 |      593 |
+|    NULL | NULL             |      3 |        0 |
+|     548 | Philps, Ardelia  |      4 |      548 |
+|     957 | Joash, Electra   |      5 |      957 |
+|     777 | Levinson, Lenore |      6 |      777 |
+|     648 | Vas, Tiphanie    |      7 |      648 |
+|     959 | Brink, Kaia      |      8 |      959 |
+|     569 | Lasser, Garrard  |      9 |      569 |
+|     429 | Adamsen, Justen  |     10 |      429 |
++---------+------------------+--------+----------+
+10 rows in set (0.09 sec)
 ```
 
 You can translate any `LEFT JOIN` to a `RIGHT JOIN` simply by swapping the order of the tables being joined:
@@ -200,8 +714,11 @@ SELECT
   z.zap_id,
   z.owned_by
 FROM
-  ref_zaps_joins u
-  RIGHT JOIN ref_users u ON u.user_id = z.owned_by
+  ref_zaps_joins z
+RIGHT JOIN
+  ref_users u
+ON
+  u.user_id = z.owned_by
 LIMIT 10;
 ```
 
@@ -209,18 +726,18 @@ LIMIT 10;
 +---------+-------------------+--------+----------+
 | user_id | full_name         | zap_id | owned_by |
 +---------+-------------------+--------+----------+
-|       1 | Jemena, Wyatt     |    411 |        1 |
-|       2 | Marienthal, Shirl |    794 |        2 |
-|       3 | Gorlin, Alene     |   NULL |     NULL |
-|       4 | McGrody, Cointon  |    830 |        4 |
-|       5 | Harriman, Neda    |    697 |        5 |
-|       6 | Lauter, Lorelle   |    942 |        6 |
-|       6 | Lauter, Lorelle   |    110 |        6 |
-|       7 | Race, Marsha      |    772 |        7 |
-|       8 | Craven, Elfreda   |    676 |        8 |
-|       9 | Azral, Terese     |    715 |        9 |
+|       1 | MacPherson, Addie |    411 |        1 |
+|       2 | Airla, Valaree    |    794 |        2 |
+|       3 | Nett, Sheppard    |   NULL |     NULL |
+|       4 | Kirschner, Robby  |    830 |        4 |
+|       5 | Bilski, Lewiss    |    697 |        5 |
+|       6 | Yamauchi, Marleah |    942 |        6 |
+|       6 | Yamauchi, Marleah |    110 |        6 |
+|       7 | Calore, Ania      |    772 |        7 |
+|       8 | Breger, Gratiana  |    676 |        8 |
+|       9 | Serafina, Janith  |    715 |        9 |
 +---------+-------------------+--------+----------+
-10 rows in set (0.08 sec)
+10 rows in set (0.15 sec)
 ```
 
 #### Full Outer Join
@@ -251,7 +768,7 @@ WHERE
   u.user_id IS NULL;
 ```
 
-To efficiently see what it's doing, you can run two queries, appending `ORDER BY -user_id DESC` and `ORDER BY user_id`, which represents the top and bottom of the result.
+To efficiently see what it's doing, you can run two queries, appending `ORDER BY -user_id DESC` and `ORDER BY user_id`, which represents the top and bottom of the result. Don't forget to add a `LIMIT` as well!
 
 <details>
   <summary>What is -user_id?</summary>
@@ -352,7 +869,7 @@ This will create an index on the first 3 characters of last_name:
 
 ```sql
 ALTER TABLE ref_users_big DROP INDEX user_name;
-CREATE INDEX user_name ON ref_users_big (last_name(3));
+CREATE INDEX last_name_partial ON ref_users_big (last_name(3));
 ```
 
 ```sql
@@ -422,79 +939,21 @@ EXPLAIN: -> Filter: (month(ref_users_big.created_at) = 6)  (cost=100955.37 rows=
 
 #### JSON / Longtext
 
-JSON has its own special requirements to be indexed, mostly if you're storing strings. First, you must select a specific part of the column's rows to be the indexed key, known as a functional key part. Additionally, the key has to have a prefix length assigned to it, but functional key parts don't allow that. Finally if you `CAST(foo) AS CHAR(n)` the selected part so the index is stored properly, the returned string has the `utf8mb4_0900_ai_ci` collation, but `JSON_UNQUOTE()` (which is done implicitly as part of selecting a part of a row to be indexed) has the `utf8mb4_bin` collation. The easiest workaround is to specify the latter's collation as part of the index creation. Also, this requires the stored data to be `k:v` objects, rather than arrays.
+JSON has its own special requirements to be indexed, mostly if you're storing strings. First, you must select a specific part of the column's rows to be the indexed key, known as a functional key part. Additionally, the key has to have a prefix length assigned to it. Depending on the version of MySQL you're using, there may also be collation differences between the return value from various JSON functions and native storage of strings. Finally, this requires the stored data to be `k:v` objects, rather than arrays.
+
+Here, we're using a multi-valued index, which behind the scenes is creating a virtual, invisible column to store the extracted JSON array as a character array.
 
 ```sql
-CREATE INDEX owned_idx ON zaps (
+CREATE INDEX user_json_array_key ON gensql (
   (
     CAST(
-      used_by ->> "$.user_id" AS CHAR(16)
-    ) COLLATE utf8mb4_bin
+      user_json -> '$.b_key.c_key' AS CHAR(64) ARRAY
+    )
   )
 );
-Query OK, 0 rows affected (0.50 sec)
-Records: 0  Duplicates: 0  Warnings: 0
 ```
 
-Alternatively, if the key you want to index can be cast to an `int`, you can use generated columns to accomplish this; you can even (as of MySQL 8.0.23) make them invisible so they don't show up for normal queries:
-
-```sql
-ALTER TABLE
-  zaps
-ADD
-  COLUMN used_by_idx_col BIGINT UNSIGNED GENERATED ALWAYS AS (
-    CAST(
-      used_by ->> "$.user_id" AS UNSIGNED
-    )
-  ) INVISIBLE;
-```
-
-```sql
-Query OK, 0 rows affected (0.09 sec)
-Records: 0  Duplicates: 0  Warnings: 0
-```
-
-```sql
-CREATE INDEX used_by_idx ON zaps (used_by_idx_col);
-```
-
-```sql
-Query OK, 0 rows affected (0.36 sec)
-Records: 0  Duplicates: 0  Warnings: 0
-```
-
-This creates an invisible column `used_by_idx_col` which automatically generates a value based on the key `user_id` in the column `used_by`, casting it to an `UNSIGNED BIGINT`. The column is invisible unless specified:
-
-```sql
-SELECT * FROM zaps\G
-```
-
-```sql
-*************************** 1. row ***************************
-             id: 1
-         zap_id: 1
-     created_at: 2022-12-30 11:46:04
-last_updated_at: NULL
-       owned_by: 42
-        used_by: {"user_id": "42"}
-1 row in set (0.00 sec)
-```
-
-```sql
-SELECT *, used_by_idx_col  FROM zaps\G
-```
-
-```sql
-*************************** 1. row ***************************
-             id: 1
-         zap_id: 1
-     created_at: 2022-12-30 11:46:04
-last_updated_at: NULL
-       owned_by: 42
-        used_by: {"user_id": "42"}
-used_by_idx_col: 42
-1 row in set (0.00 sec)
-```
+See [MySQL docs](https://dev.mysql.com/doc/refman/8.0/en/create-index.html#create-index-multi-valued) for more information on indexing JSON values, and properly using them.
 
 #### Composite indices
 
@@ -519,7 +978,8 @@ SELECT
   last_name,
   COUNT(*) c
 FROM
-  ref_users IGNORE INDEX(full_name)
+  ref_users_big
+IGNORE INDEX(full_name)
 GROUP BY
   first_name,
   last_name
@@ -529,15 +989,15 @@ HAVING
 
 ```sql
 *************************** 1. row ***************************
-EXPLAIN: -> Filter: (c > 1)  (actual time=17726.018..19132.446 rows=962 loops=1)
-    -> Table scan on <temporary>  (actual time=0.005..927.857 rows=999037 loops=1)
-        -> Aggregate using temporary table  (actual time=17725.897..18864.869 rows=999037 loops=1)
-            -> Table scan on ref_users  (cost=100560.90 rows=997354) (actual time=0.405..7162.749 rows=1000000 loops=1)
+EXPLAIN: -> Filter: (c > 1)  (actual time=23295.903..24686.641 rows=4318 loops=1)
+    -> Table scan on <temporary>  (actual time=0.005..903.621 rows=995670 loops=1)
+        -> Aggregate using temporary table  (actual time=23295.727..24415.358 rows=995670 loops=1)
+            -> Table scan on ref_users_big  (cost=104920.32 rows=995522) (actual time=2.329..10156.102 rows=1000000 loops=1)
 
-1 row in set (19.58 sec)
+1 row in set (25.26 sec)
 ```
 
-The query took 19.58 seconds, and resulted in 962 rows. The output is read from the bottom up - a table scan was performed on the entire table, then a temporary table with the `GROUP BY` aggregation was created, and finally a second table scan on that temporary table was performed to find the duplicated tuples.
+The query took 25.26 seconds, and resulted in 4318 rows. The output is read from the bottom up - a table scan was performed on the entire table, then a temporary table with the `GROUP BY` aggregation was created, and finally a second table scan on that temporary table was performed to find the duplicated tuples.
 
 If you're curious, `actual time` is in milliseconds, and consists of two timings - the first is the time to initiate the step and return the first row; the second is the time to initiate the step and return all rows. `cost` is an arbitrary number indicating what the query cost optimizer thinks the query costs to perform, and is meaningless.
 
@@ -549,7 +1009,7 @@ SELECT
   last_name,
   COUNT(*) c
 FROM
-  ref_users
+  ref_users_big
 GROUP BY
   first_name,
   last_name
@@ -559,11 +1019,11 @@ HAVING
 
 ```sql
 *************************** 1. row ***************************
-EXPLAIN: -> Filter: (c > 1)  (actual time=8.627..9276.021 rows=962 loops=1)
-    -> Group aggregate: count(0)  (actual time=0.756..8703.629 rows=999037 loops=1)
-        -> Index scan on ref_users using full_name  (cost=100560.90 rows=997354) (actual time=0.683..5574.086 rows=1000000 loops=1)
+EXPLAIN: -> Filter: (c > 1)  (actual time=6.318..12202.646 rows=4318 loops=1)
+    -> Group aggregate: count(0)  (actual time=0.864..11447.233 rows=995670 loops=1)
+        -> Index scan on ref_users_big using full_name  (cost=104920.32 rows=995522) (actual time=0.815..7315.098 rows=1000000 loops=1)
 
-1 row in set (9.28 sec)
+1 row in set (12.32 sec)
 ```
 
 With the index in place, an index scan is performed instead of two table scans, resulting in a ~2x speedup.
@@ -572,68 +1032,68 @@ Another example, retreiving a specific doubled tuple that I know exists:
 
 ```sql
 SELECT
-  *
+  user_id,
+  full_name,
+  email,
+  city,
+  country
 FROM
-  ref_users USE INDEX()
+  ref_users_big
 WHERE
-  first_name = 'Zoltai'
+  first_name = 'Ashlie'
 AND
-  last_name = 'Tupler';
+  last_name = 'Godred';
 ```
 
 ```sql
-+--------+------------+-----------+---------+
-| id     | first_name | last_name | user_id |
-+--------+------------+-----------+---------+
-| 173469 | Zoltai     | Tupler    |  173469 |
-| 923085 | Zoltai     | Tupler    |  923085 |
-+--------+------------+-----------+---------+
-2 rows in set (6.72 sec)
++---------+----------------+-------------------------+----------+--------------+
+| user_id | full_name      | email                   | city     | country      |
++---------+----------------+-------------------------+----------+--------------+
+|  974206 | Godred, Ashlie | ashlie.godred@mushy.com | Mikkeli  | Finland      |
+|  987301 | Godred, Ashlie | ashlie.godred@suave.com | Pretoria | South Africa |
++---------+----------------+-------------------------+----------+--------------+
+2 rows in set (0.01 sec)
+```
+
+vs. if `USE INDEX()` is added to the query:
+
+```sql
++---------+----------------+-------------------------+----------+--------------+
+| user_id | full_name      | email                   | city     | country      |
++---------+----------------+-------------------------+----------+--------------+
+|  974206 | Godred, Ashlie | ashlie.godred@mushy.com | Mikkeli  | Finland      |
+|  987301 | Godred, Ashlie | ashlie.godred@suave.com | Pretoria | South Africa |
++---------+----------------+-------------------------+----------+--------------+
+2 rows in set (14.60 sec)
 ```
 
 Note that `USE INDEX()` is valid syntax to tell MySQL to ignore all indexes.
 
-If instead, either the `full_name` or `first_name` index is ignored on its own, its complement will be used, and they're effectively equally fast due to the filtered result set (although as shown, the query ignoring the `full_name` index is an order of magnitude slower):
+If instead, either the `full_name` or `last_name_partial` index we made perviously is ignored on its own, its complement will be used, and they're effectively equally fast due to the filtered result set - here, using the partial index on `last_name` dropped the candidate tuples from 1,000,000 to 1,066.
 
 ```sql
 EXPLAIN ANALYZE
 SELECT
-  *
+  user_id,
+  full_name,
+  email,
+  city,
+  country
 FROM
-  ref_users IGNORE INDEX(full_name)
+  ref_users_big IGNORE INDEX(full_name)
 WHERE
-  first_name = 'Zoltai'
+  first_name = 'Ashlie'
   AND
-  last_name = 'Tupler'\G
+  last_name = 'Godred'\G
 ```
 
 ```sql
 *************************** 1. row ***************************
-EXPLAIN: -> Filter: (ref_users.last_name = 'Tupler')  (cost=11.18 rows=4) (actual time=3.944..4.044 rows=2 loops=1)
-    -> Index lookup on ref_users using first_name (first_name='Zoltai')  (cost=11.18 rows=43) (actual time=3.922..4.003 rows=43 loops=1)
+EXPLAIN: -> Filter: ((ref_users_big.last_name = 'Godred') and (ref_users_big.first_name = 'Ashlie'))  (cost=641.79 rows=0) (actual time=315.346..322.278 rows=2 loops=1)
+    -> Index lookup on ref_users_big using last_name_partial (last_name='Godred')  (cost=641.79 rows=1066) (actual time=6.602..317.360 rows=1066 loops=1)
 
-1 row in set (0.01 sec)
+1 row in set (0.34 sec)
 ```
-
-```sql
-EXPLAIN ANALYZE
-SELECT
-  *
-FROM
-  ref_users IGNORE INDEX(first_name)
-WHERE
-  first_name = 'Zoltai'
-AND
-  last_name = 'Tupler'\G
-```
-
-```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Index lookup on ref_users using full_name (first_name='Zoltai', last_name='Tupler')  (cost=0.70 rows=2) (actual time=0.369..0.394 rows=2 loops=1)
-
-1 row in set (0.00 sec)
-```
-
 #### Testing indices
 
 MySQL 8 added the ability to toggle an index on and off, without actually dropping it. This way, if you want to test whether or not an index is helpful, you can toggle it off, observe query performance, and then decide whether or not to leave it.
@@ -647,12 +1107,36 @@ Query OK, 0 rows affected (0.28 sec)
 Records: 0  Duplicates: 0  Warnings: 0
 ```
 
+```sql
+EXPLAIN ANALYZE
+SELECT
+  user_id,
+  full_name,
+  email,
+  city,
+  country
+FROM
+  ref_users_big
+WHERE
+  first_name = 'Ashlie'
+  AND
+  last_name = 'Godred'\G
+```
+
+```sql
+*************************** 1. row ***************************
+EXPLAIN: -> Filter: ((ref_users_big.last_name = 'Godred') and (ref_users_big.first_name = 'Ashlie'))  (cost=641.79 rows=0) (actual time=315.346..322.278 rows=2 loops=1)
+    -> Index lookup on ref_users_big using last_name_partial (last_name='Godred')  (cost=641.79 rows=1066) (actual time=6.602..317.360 rows=1066 loops=1)
+
+1 row in set (0.34 sec)
+```
+
 #### Descending indices
 
 By default, indices are sorted in ascending order. While they can still be used when reversed, it's not as fast (although the performance difference may be minimal - test your theory before committing to it). If you are frequently querying something with `ORDER BY <row> DESC`, it may be helpful to instead create an index in descending order.
 
 ```sql
-CREATE INDEX first_desc ON ref_users (first_name DESC);
+CREATE INDEX first_desc ON ref_users_big (first_name DESC);
 ```
 
 ```sql
@@ -734,155 +1218,34 @@ EXPLAIN: -> Inner hash join (ref_users.user_id = zaps.owned_by)  (cost=989919772
 
 #### HAVING
 
-Earlier, we used `HAVING` in a `GROUP BY` aggregation. The difference between the two is that `WHERE` filters the results before they're sent to be aggregated, whereas `HAVING` filters the aggregation, and thus predicates relying on the aggregation result can be used. It's not limited to only aggregation results, though - a common use case is to allow the use of aliases or subquery results in filtering. Be aware that it's generally more performant to use `WHERE` if possible (consider re-writing your query if it isn't).
+Earlier, we used `HAVING` in a `GROUP BY` aggregation. The difference between the two is that `WHERE` filters the results before they're sent to be aggregated, whereas `HAVING` filters the aggregation, and thus predicates relying on the aggregation result can be used. It's not limited to only aggregation results, though - a common use case is to allow the use of aliases or subquery results in filtering. Be aware that it's generally more performant to use `WHERE` if possible (consider re-writing your query if it isn't), but sometimes, you need it.
 
 ```sql
 SELECT
-  c.first_name,
-  c.last_name,
-  c.city,
-  (
-    SELECT
-      status_name
-    FROM
-      orders_status os
-    WHERE
-      os.id = o.status_id
-  ) AS order_status
+  ref_users_big.city,
+  COUNT(ref_zaps_big.zap_id) as zap_count
 FROM
-  customers c
-  JOIN orders o ON c.id = o.customer_id
-WHERE
-  c.job_title LIKE 'Purchasing%'
-  AND
-  order_status = 'New';
-ERROR 1054 (42S22): Unknown column 'order_status' in 'where clause'
-```
-
-The desired output here is to produce the name and city of any customer who has a job title starting with `Purchasing` and has placed a new order. Since the `order_status` column is the result of a subquery (returning the text name of a given order status ID), it can't be filtered with `WHERE`.
-
-```sql
-SELECT
-  c.first_name,
-  c.last_name,
-  c.city,
-  (
-    SELECT
-      status_name
-    FROM
-      orders_status os
-    WHERE
-      os.id = o.status_id
-  ) AS order_status
-FROM
-  customers c
-  JOIN orders o ON c.id = o.customer_id
-WHERE
-  c.job_title LIKE 'Purchasing%'
+  ref_users_big
+LEFT JOIN
+  ref_zaps_big
+ON
+  ref_users_big.user_id = ref_zaps_big.owned_by
+GROUP BY
+  ref_users_big.city
 HAVING
-  order_status = 'New';
+  zap_count > 250;
 ```
 
 ```sql
-+------------+---------------+-------------+--------------+
-| first_name | last_name     | city        | order_status |
-+------------+---------------+-------------+--------------+
-| Thomas     | Axen          | Los Angelas | New          |
-| Christina  | Lee           | New York    | New          |
-| Christina  | Lee           | New York    | New          |
-| Francisco  | Pérez-Olaeta  | Milwaukee   | New          |
-| Elizabeth  | Andersen      | Portland    | New          |
-| Roland     | Wacker        | Chicago     | New          |
-| Peter      | Krschne       | Miami       | New          |
-| Peter      | Krschne       | Miami       | New          |
-| John       | Edwards       | Las Vegas   | New          |
-| Karen      | Toh           | Las Vegas   | New          |
-| Amritansh  | Raghav        | Memphis     | New          |
-| Soo Jung   | Lee           | Denver      | New          |
-+------------+---------------+-------------+--------------+
-12 rows in set (0.02 sec)
-```
-
-This is somewhat of a contrived example, since it's not necessary to return the actual `order_status` text at. However, if desired, it can be simplified with another `JOIN` instead of `HAVING`:
-
-```sql
-SELECT
-  c.first_name,
-  c.last_name,
-  c.city,
-  os.status_name AS order_status
-FROM
-  customers c
-  JOIN orders o ON c.id = o.customer_id
-  JOIN orders_status os ON os.id = o.status_id
-WHERE
-  c.job_title LIKE 'Purchasing%'
-  AND
-  os.status_name = 'New';
-```
-
-```sql
-+------------+---------------+-------------+--------------+
-| first_name | last_name     | city        | order_status |
-+------------+---------------+-------------+--------------+
-| Thomas     | Axen          | Los Angelas | New          |
-| Christina  | Lee           | New York    | New          |
-| Christina  | Lee           | New York    | New          |
-| Francisco  | Pérez-Olaeta  | Milwaukee   | New          |
-| Elizabeth  | Andersen      | Portland    | New          |
-| Roland     | Wacker        | Chicago     | New          |
-| Peter      | Krschne       | Miami       | New          |
-| Peter      | Krschne       | Miami       | New          |
-| John       | Edwards       | Las Vegas   | New          |
-| Karen      | Toh           | Las Vegas   | New          |
-| Amritansh  | Raghav        | Memphis     | New          |
-| Soo Jung   | Lee           | Denver      | New          |
-+------------+---------------+-------------+--------------+
-12 rows in set (0.02 sec)
-```
-
-Examining the two with `EXPLAIN ANALYZE` shows the differences:
-
-```sql
---- HAVING query
-*************************** 1. row ***************************
-EXPLAIN: -> Filter: (order_status = 'New')  (actual time=0.701..4.597 rows=12 loops=1)
-    -> Nested loop inner join  (cost=6.60 rows=10) (actual time=0.574..3.200 rows=42 loops=1)
-        -> Filter: (c.job_title like 'Purchasing%')  (cost=3.15 rows=3) (actual time=0.349..0.505 rows=20 loops=1)
-            -> Table scan on c  (cost=3.15 rows=29) (actual time=0.333..0.444 rows=29 loops=1)
-        -> Index lookup on o using customer_id (customer_id=c.id)  (cost=0.85 rows=3) (actual time=0.107..0.132 rows=2 loops=20)
-    -> Select #2 (subquery in condition; dependent)
-        -> Single-row index lookup on os using PRIMARY (id=o.status_id)  (cost=0.35 rows=1) (actual time=0.022..0.022 rows=1 loops=54)
--> Select #2 (subquery in projection; dependent)
-    -> Single-row index lookup on os using PRIMARY (id=o.status_id)  (cost=0.35 rows=1) (actual time=0.022..0.022 rows=1 loops=54)
-
-1 row in set, 1 warning (0.00 sec)
-```
-
-```sql
--- This is less of a warning, and more of a note stating that the query optimizer decided to resolve order.status_id in the first SELECT, rather than the subquery where it's referenced.
-SHOW WARNINGS\G
-*************************** 1. row ***************************
-  Level: Note
-   Code: 1276
-Message: Field or reference 'northwind.o.status_id' of SELECT #2 was resolved in SELECT #1
-1 row in set (0.00 sec)
-```
-
-```sql
---- Multiple JOIN query
-*************************** 1. row ***************************
-EXPLAIN: -> Nested loop inner join  (cost=6.33 rows=0) (actual time=1.645..8.714 rows=12 loops=1)
-    -> Inner hash join (no condition)  (cost=3.80 rows=0) (actual time=1.161..1.665 rows=20 loops=1)
-        -> Filter: (c.job_title like 'Purchasing%')  (cost=3.15 rows=3) (actual time=0.669..1.062 rows=20 loops=1)
-            -> Table scan on c  (cost=3.15 rows=29) (actual time=0.640..0.922 rows=29 loops=1)
-        -> Hash
-            -> Filter: (os.status_name = 'New')  (cost=0.65 rows=1) (actual time=0.262..0.338 rows=1 loops=1)
-                -> Table scan on os  (cost=0.65 rows=4) (actual time=0.251..0.319 rows=4 loops=1)
-    -> Filter: (o.status_id = os.id)  (cost=0.78 rows=1) (actual time=0.301..0.348 rows=1 loops=20)
-        -> Index lookup on o using customer_id (customer_id=c.id)  (cost=0.78 rows=3) (actual time=0.283..0.338 rows=2 loops=20)
-
-1 row in set (0.01 sec)
++----------+-----------+
+| city     | zap_count |
++----------+-----------+
+| Hsin-chu |       260 |
+| Vitória  |       293 |
+| Cordoba  |       290 |
+| Gdañsk   |       292 |
++----------+-----------+
+4 rows in set (32.86 sec)
 ```
 
 ## Query optimization
@@ -900,7 +1263,7 @@ EXPLAIN ANALYZE
 SELECT
   *
 FROM
-  ref_users
+  ref_users_big
 ORDER BY
   first_name,
   last_name\G
@@ -917,11 +1280,11 @@ EXPLAIN: -> Sort: ref_users.first_name, ref_users.last_name  (cost=100495.40 row
 ```sql
 EXPLAIN ANALYZE
 SELECT
-  id,
+  user_id,
   first_name,
   last_name
 FROM
-  ref_users
+  ref_users_big
 ORDER BY
   first_name,
   last_name\G
@@ -955,65 +1318,71 @@ EXPLAIN: -> Index scan on ref_users using full_name  (cost=348844.90 rows=996699
 1 row in set (1 min 7.13 sec)
 ```
 
-In comparison, if your `ORDER BY` is covered by the index (the primary key - `id` here - is implicitly part of indices, and thus doesn't cause a slowdown), queries can use it, and are much faster! If you're writing software that will be accessing a database, and you don't actually need all of the columns, don't request them. Take the time to be deliberate in what you request.
+In comparison, if your `ORDER BY` is covered by the index (the primary key - `user_id` here - is implicitly part of indices, and thus doesn't cause a slowdown), queries can use it, and are much faster! If you're writing software that will be accessing a database, and you don't actually need all of the columns, don't request them. Take the time to be deliberate in what you request.
 
 ### OFFSET / LIMIT
 
 If you need to get `n` rows from the middle of a table, unless you have a really good reason to do so, please don't do this:
 
 ```sql
-USE test;
-Database changed
-```
-
-```sql
 -- The alternate form (and, IMO, the clearer one) is LIMIT 10 OFFSET 500000
-SELECT * FROM ref_users LIMIT 500000,10;
+SELECT
+  user_id,
+  full_name
+FROM
+  ref_users_big
+LIMIT 500000,10;
 ```
 
 ```sql
-+--------+------------+-----------+---------+
-| id     | first_name | last_name | user_id |
-+--------+------------+-----------+---------+
-| 500001 | Cutlor     | Marlee    |  500001 |
-| 500002 | Schaper    | Tol       |  500002 |
-| 500003 | Toney      | Wait      |  500003 |
-| 500004 | Robbin     | Jordanson |  500004 |
-| 500005 | Weiner     | Mendelson |  500005 |
-| 500006 | Willow     | Joses     |  500006 |
-| 500007 | Weatherby  | Reginald  |  500007 |
-| 500008 | Frendel    | Hoxsie    |  500008 |
-| 500009 | Schonfeld  | Charmion  |  500009 |
-| 500010 | O'Doneven  | Theone    |  500010 |
-+--------+------------+-----------+---------+
-10 rows in set (3.10 sec)
++---------+-------------------+
+| user_id | full_name         |
++---------+-------------------+
+|  500001 | Ader, Wilona      |
+|  500002 | Lindsley, Angy    |
+|  500003 | Scarito, Vladimir |
+|  500004 | Hoenack, Rossy    |
+|  500005 | Cooley, Theobald  |
+|  500006 | Pineda, Gaven     |
+|  500007 | Harberd, Odie     |
+|  500008 | Engleman, Mendy   |
+|  500009 | Michon, Dionysus  |
+|  500010 | Seaden, Leigha    |
++---------+-------------------+
+10 rows in set (6.29 sec)
 ```
 
 Doing this causes a table scan up to the specified offset. Far better, if you have a known monotonic number (like `id`), is to use a `WHERE` predicate:
 
 ```sql
-SELECT * FROM ref_users WHERE id > 500000 LIMIT 10;
+SELECT
+  user_id,
+  full_name
+FROM
+  ref_users_big
+WHERE id > 500000
+LIMIT 10;
 ```
 
 ```sql
-+--------+------------+-----------+---------+
-| id     | first_name | last_name | user_id |
-+--------+------------+-----------+---------+
-| 500001 | Cutlor     | Marlee    |  500001 |
-| 500002 | Schaper    | Tol       |  500002 |
-| 500003 | Toney      | Wait      |  500003 |
-| 500004 | Robbin     | Jordanson |  500004 |
-| 500005 | Weiner     | Mendelson |  500005 |
-| 500006 | Willow     | Joses     |  500006 |
-| 500007 | Weatherby  | Reginald  |  500007 |
-| 500008 | Frendel    | Hoxsie    |  500008 |
-| 500009 | Schonfeld  | Charmion  |  500009 |
-| 500010 | O'Doneven  | Theone    |  500010 |
-+--------+------------+-----------+---------+
-10 rows in set (0.01 sec)
++---------+-------------------+
+| user_id | full_name         |
++---------+-------------------+
+|  500001 | Ader, Wilona      |
+|  500002 | Lindsley, Angy    |
+|  500003 | Scarito, Vladimir |
+|  500004 | Hoenack, Rossy    |
+|  500005 | Cooley, Theobald  |
+|  500006 | Pineda, Gaven     |
+|  500007 | Harberd, Odie     |
+|  500008 | Engleman, Mendy   |
+|  500009 | Michon, Dionysus  |
+|  500010 | Seaden, Leigha    |
++---------+-------------------+
+10 rows in set (0.02 sec)
 ```
 
-Using `id` as the filter allows it to be used for an index range scan, which is nearly instant. If you were doing this programmatically to support pagination, the last value of `id` could be used for the next iteration's predicate.
+Using `user_id` as the filter allows it to be used for an index range scan, which is nearly instant. If you were doing this programmatically to support pagination, the last value of `id` could be used for the next iteration's predicate.
 
 ### DISTINCT
 
@@ -1027,14 +1396,14 @@ SELECT
   first_name,
   last_name
 FROM
-  ref_users\G
+  ref_users_big\G
 ```
 
 ```sql
 *************************** 1. row ***************************
-EXPLAIN: -> Index scan on ref_users using full_name  (cost=101977.37 rows=996699) (actual time=1.163..6200.004 rows=1000000 loops=1)
+EXPLAIN: -> Table scan on ref_users_big  (cost=101365.53 rows=995522) (actual time=1.815..7213.716 rows=1000000 loops=1)
 
-1 row in set (7.09 sec)
+1 row in set (8.13 sec)
 ```
 
 ```sql
@@ -1043,38 +1412,16 @@ SELECT DISTINCT
   first_name,
   last_name
 FROM
-  ref_users\G
+  ref_users_big\G
 ```
 
 ```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Group (no aggregates)  (actual time=0.429..9110.455 rows=999037 loops=1)
-    -> Index scan on ref_users using full_name  (cost=101977.37 rows=996699) (actual time=0.403..6004.725 rows=1000000 loops=1)
+EXPLAIN: -> Table scan on <temporary>  (actual time=0.005..765.220 rows=995670 loops=1)
+    -> Temporary table with deduplication  (cost=101050.45 rows=995522) (actual time=15306.678..16296.289 rows=995670 loops=1)
+        -> Table scan on ref_users_big  (cost=101050.45 rows=995522) (actual time=0.825..8718.651 rows=1000000 loops=1)
 
-1 row in set (9.96 sec)
+1 row in set (17.73 sec)
 ```
-
-Bear in mind that the above was using an index scan! If there isn't a covering index available, this is the `DISTINCT` result:
-
-```sql
-EXPLAIN ANALYZE
-SELECT DISTINCT
-  first_name,
-  last_name
-FROM
-  ref_users
-USE INDEX()\G
-```
-
-```sql
-*************************** 1. row ***************************
-EXPLAIN: -> Table scan on <temporary>  (actual time=0.015..694.662 rows=999037 loops=1)
-    -> Temporary table with deduplication  (cost=100495.40 rows=996699) (actual time=13580.563..14471.841 rows=999037 loops=1)
-        -> Table scan on ref_users  (cost=100495.40 rows=996699) (actual time=0.973..7443.480 rows=1000000 loops=1)
-
-1 row in set (15.72 sec)
-```
-
 ## Cleanup
 
 This isn't something you'll do often, if at all, so may as well do so now, eh?
