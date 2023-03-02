@@ -1175,12 +1175,21 @@ There are some restrictions. The documentation lists all of them, but the bigges
 CREATE TABLE users SELECT * FROM test.ref_users LIMIT 0;
 ```
 
+**Warning**
+
+The second form shown has a [large list of things](https://dev.mysql.com/doc/refman/8.0/en/create-table-select.html) it does not do:
+
+- Copy any indexes, including primary keys
+- Maintain the `AUTO_INCREMENT` attribute
+- Maintain data types - `VARCHAR` may become `CHAR`
+- Maintain default values for columns that are expressions
+
 Finally, note that both of these _only_ copy the schema definition, not the data. The table you're copying from actually has thousands of rows in it, but none of those will be in your table.
 
 <details>
   <summary>What if you wanted to copy data as well?</summary>
 
-  The above alternative query hopefully hinted at it!
+  The above alternative query hopefully hinted at it! Just take heed of the warning.
 
   ```sql
   DROP TABLE users; CREATE TABLE users SELECT * FROM test.ref_users LIMIT 1000;
@@ -1210,9 +1219,11 @@ Query OK, 0 rows affected (0.42 sec)
 
 `0 rows affected` may be confusing, as we in fact just affected 1000 rows, but remember that this is the same as a `DROP TABLE`, which similarly doesn't report on the number of rows removed.
 
-Now, we can copy into the table:
+Now, we can copy into the table; but first, we're going to `DROP` the table and create it properly with `CREATE LIKE` so we don't have any issues with missing primary keys.
 
 ```sql
+DROP TABLE users;
+CREATE TABLE users LIKE test.ref_users;
 INSERT INTO users SELECT * FROM test.ref_users_big LIMIT 10000;
 ```
 
