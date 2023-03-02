@@ -414,12 +414,9 @@ LIMIT 10;
 -- arrays are 0-indexed, so this is a slice, like lst[1:3]
 SELECT
   email,
-  user_json->'$.e_key.d_key[1 to 2]'
+  user_json->'$.b_key.c_key[1 to 2]'
 FROM
   gensql
-WHERE
-  user_json->>'$.e_key'
-IS NOT NULL
 LIMIT 10;
 ```
 
@@ -451,9 +448,9 @@ See [MySQL docs](https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.h
 
 ```sql
 INSERT INTO users
-  first_name, last_name, user_id)
+  (first_name, last_name, user_id)
 VALUES
-  ("Leeroy", "Jenkins", 42);
+  ('Leeroy', 'Jenkins', 42);
 ```
 
 ```sql
