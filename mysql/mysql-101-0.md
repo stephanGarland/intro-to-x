@@ -349,10 +349,6 @@ SELECT host, user FROM mysql.user;
 ```
 
 ```sql
-SELECT host, user FROM mysql.user;
-```
-
-```sql
 +-------------+------------------+
 | host        | user             |
 +-------------+------------------+
@@ -655,7 +651,10 @@ Records: 0  Duplicates: 0  Warnings: 0
 ```
 
 ```sql
-mysql> SHOW COLUMNS FROM users;
+SHOW COLUMNS FROM users;
+```
+
+```sql
 +------------+--------------+------+-----+---------+----------------+
 | Field      | Type         | Null | Key | Default | Extra          |
 +------------+--------------+------+-----+---------+----------------+
